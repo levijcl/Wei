@@ -27,28 +27,47 @@ class OrderTest {
     }
 
     @Test
-    void shouldCreateOrderWithEmptyLineItems() {
-        Order order = new Order("ORDER-002", null);
+    void shouldThrowExceptionWhenCreatingOrderWithNullLineItems() {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> {
+                            new Order("ORDER-002", null);
+                        });
 
-        assertEquals("ORDER-002", order.getOrderId());
-        assertEquals(OrderStatus.CREATED, order.getStatus());
-        assertTrue(order.getOrderLineItems().isEmpty());
+        assertTrue(exception.getMessage().contains("Order must have at least one line item"));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenCreatingOrderWithEmptyLineItems() {
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> {
+                            new Order("ORDER-003", new ArrayList<>());
+                        });
+
+        assertTrue(exception.getMessage().contains("Order must have at least one line item"));
     }
 
     @Test
     void shouldAddOrderLineItem() {
-        Order order = new Order("ORDER-003", new ArrayList<>());
-        OrderLineItem item = new OrderLineItem("SKU-001", 5, new BigDecimal("50.00"));
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 5, new BigDecimal("50.00")));
+        Order order = new Order("ORDER-004", items);
+        OrderLineItem newItem = new OrderLineItem("SKU-002", 3, new BigDecimal("30.00"));
 
-        order.addOrderLineItem(item);
+        order.addOrderLineItem(newItem);
 
-        assertEquals(1, order.getOrderLineItems().size());
-        assertEquals("SKU-001", order.getOrderLineItems().get(0).getSku());
+        assertEquals(2, order.getOrderLineItems().size());
+        assertEquals("SKU-002", order.getOrderLineItems().get(1).getSku());
     }
 
     @Test
     void shouldReserveInventoryWhenStatusIsCreated() {
-        Order order = new Order("ORDER-004", new ArrayList<>());
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+        Order order = new Order("ORDER-005", items);
         ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
 
         order.reserveInventory(reservationInfo);
@@ -60,7 +79,9 @@ class OrderTest {
 
     @Test
     void shouldThrowExceptionWhenReservingInventoryWithInvalidStatus() {
-        Order order = new Order("ORDER-005", new ArrayList<>());
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+        Order order = new Order("ORDER-006", items);
         order.setStatus(OrderStatus.RESERVED);
         ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
 
@@ -76,7 +97,9 @@ class OrderTest {
 
     @Test
     void shouldCommitOrderWhenStatusIsReserved() {
-        Order order = new Order("ORDER-006", new ArrayList<>());
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+        Order order = new Order("ORDER-007", items);
         order.setStatus(OrderStatus.RESERVED);
 
         order.commitOrder();
@@ -86,7 +109,9 @@ class OrderTest {
 
     @Test
     void shouldThrowExceptionWhenCommittingOrderWithInvalidStatus() {
-        Order order = new Order("ORDER-007", new ArrayList<>());
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+        Order order = new Order("ORDER-008", items);
         order.setStatus(OrderStatus.CREATED);
 
         IllegalStateException exception =
@@ -101,7 +126,9 @@ class OrderTest {
 
     @Test
     void shouldMarkAsShippedWhenStatusIsCommitted() {
-        Order order = new Order("ORDER-008", new ArrayList<>());
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+        Order order = new Order("ORDER-009", items);
         order.setStatus(OrderStatus.COMMITTED);
         ShipmentInfo shipmentInfo = new ShipmentInfo("DHL", "TRACK-12345");
 
@@ -114,7 +141,9 @@ class OrderTest {
 
     @Test
     void shouldThrowExceptionWhenMarkingAsShippedWithInvalidStatus() {
-        Order order = new Order("ORDER-009", new ArrayList<>());
+        List<OrderLineItem> items = new ArrayList<>();
+        items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+        Order order = new Order("ORDER-010", items);
         order.setStatus(OrderStatus.CREATED);
         ShipmentInfo shipmentInfo = new ShipmentInfo("DHL", "TRACK-12345");
 

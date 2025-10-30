@@ -16,13 +16,18 @@ public class Order {
     }
 
     public Order(String orderId, List<OrderLineItem> orderLineItems) {
+        if (orderLineItems == null || orderLineItems.isEmpty()) {
+            throw new IllegalArgumentException("Order must have at least one line item");
+        }
         this.orderId = orderId;
         this.status = OrderStatus.CREATED;
-        this.orderLineItems =
-                orderLineItems != null ? new ArrayList<>(orderLineItems) : new ArrayList<>();
+        this.orderLineItems = new ArrayList<>(orderLineItems);
     }
 
     public void createOrder() {
+        if (this.orderLineItems == null || this.orderLineItems.isEmpty()) {
+            throw new IllegalStateException("Order must have at least one line item");
+        }
         this.status = OrderStatus.CREATED;
     }
 
