@@ -49,20 +49,18 @@ class OrderApplicationServiceTest {
     }
 
     @Test
-    void shouldCreateOrderWithEmptyItems() {
+    void shouldThrowExceptionWhenCreatingOrderWithEmptyItems() {
         CreateOrderCommand command = new CreateOrderCommand("ORDER-002", new ArrayList<>());
 
-        when(orderRepository.save(any(Order.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> {
+                            orderApplicationService.createOrder(command);
+                        });
 
-        Order createdOrder = orderApplicationService.createOrder(command);
-
-        assertNotNull(createdOrder);
-        assertEquals("ORDER-002", createdOrder.getOrderId());
-        assertEquals(OrderStatus.CREATED, createdOrder.getStatus());
-        assertTrue(createdOrder.getOrderLineItems().isEmpty());
-
-        verify(orderRepository, times(1)).save(any(Order.class));
+        assertTrue(exception.getMessage().contains("Order must have at least one line item"));
+        verify(orderRepository, never()).save(any(Order.class));
     }
 
     @Test
@@ -84,7 +82,9 @@ class OrderApplicationServiceTest {
 
     @Test
     void shouldCallRepositorySaveExactlyOnce() {
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-004", new ArrayList<>());
+        List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-100", 3, new BigDecimal("30.50")));
+        CreateOrderCommand command = new CreateOrderCommand("ORDER-004", items);
 
         when(orderRepository.save(any(Order.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
