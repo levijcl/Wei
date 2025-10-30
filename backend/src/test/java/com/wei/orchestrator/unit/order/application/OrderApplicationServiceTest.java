@@ -49,18 +49,15 @@ class OrderApplicationServiceTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenCreatingOrderWithEmptyItems() {
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-002", new ArrayList<>());
-
+    void shouldThrowExceptionWhenCreatingCommandWithEmptyItems() {
         IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class,
                         () -> {
-                            orderApplicationService.createOrder(command);
+                            new CreateOrderCommand("ORDER-002", new ArrayList<>());
                         });
 
-        assertTrue(exception.getMessage().contains("Order must have at least one line item"));
-        verify(orderRepository, never()).save(any(Order.class));
+        assertTrue(exception.getMessage().contains("Order must have at least one item"));
     }
 
     @Test

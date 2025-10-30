@@ -66,22 +66,6 @@ class OrderApplicationServiceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenCreatingOrderWithEmptyLineItems() {
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-003", new ArrayList<>());
-
-        IllegalArgumentException exception =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> {
-                            orderApplicationService.createOrder(command);
-                        });
-
-        assertTrue(exception.getMessage().contains("Order must have at least one line item"));
-        Optional<Order> persistedOrder = orderRepository.findById("ORDER-003");
-        assertFalse(persistedOrder.isPresent());
-    }
-
-    @Test
     void shouldPersistLineItemsCorrectly() {
         List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
         items.add(new CreateOrderCommand.OrderLineItemDto("SKU-200", 15, new BigDecimal("150.50")));
