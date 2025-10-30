@@ -6,9 +6,11 @@ import static org.mockito.Mockito.*;
 
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
+import com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.order.domain.service.OrderDomainService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +24,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OrderApplicationServiceTest {
 
     @Mock private OrderRepository orderRepository;
+
+    @Mock private OrderDomainService orderDomainService;
 
     @InjectMocks private OrderApplicationService orderApplicationService;
 
@@ -90,5 +94,28 @@ class OrderApplicationServiceTest {
 
         verify(orderRepository, times(1)).save(any(Order.class));
         verifyNoMoreInteractions(orderRepository);
+    }
+
+    @Test
+    void shouldThrowExceptionWhenOrderIdAlreadyExists() {
+        List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-001", 10, new BigDecimal("100.00")));
+        CreateOrderCommand command = new CreateOrderCommand("ORDER-005", items);
+
+        doThrow(new OrderAlreadyExistsException("Order with ID ORDER-005 already exists"))
+                .when(orderDomainService)
+                .validateOrderCreation("ORDER-005");
+
+        OrderAlreadyExistsException exception =
+                assertThrows(
+                        OrderAlreadyExistsException.class,
+                        () -> {
+                            orderApplicationService.createOrder(command);
+                        });
+
+        assertTrue(exception.getMessage().contains("ORDER-005"));
+        assertTrue(exception.getMessage().contains("already exists"));
+        verify(orderDomainService, times(1)).validateOrderCreation("ORDER-005");
+        verify(orderRepository, never()).save(any(Order.class));
     }
 }

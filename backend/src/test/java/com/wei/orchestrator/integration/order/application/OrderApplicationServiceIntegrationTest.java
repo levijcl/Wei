@@ -125,4 +125,28 @@ class OrderApplicationServiceIntegrationTest extends BaseIntegrationTest {
         assertEquals(new BigDecimal("99.99"), order.getOrderLineItems().get(0).getPrice());
         assertEquals(new BigDecimal("0.01"), order.getOrderLineItems().get(1).getPrice());
     }
+
+    @Test
+    void shouldThrowExceptionWhenCreatingOrderWithDuplicateId() {
+        List<CreateOrderCommand.OrderLineItemDto> items1 = new ArrayList<>();
+        items1.add(new CreateOrderCommand.OrderLineItemDto("SKU-800", 5, new BigDecimal("50.00")));
+        CreateOrderCommand command1 = new CreateOrderCommand("ORDER-DUPLICATE", items1);
+
+        orderApplicationService.createOrder(command1);
+
+        List<CreateOrderCommand.OrderLineItemDto> items2 = new ArrayList<>();
+        items2.add(new CreateOrderCommand.OrderLineItemDto("SKU-801", 3, new BigDecimal("30.00")));
+        CreateOrderCommand command2 = new CreateOrderCommand("ORDER-DUPLICATE", items2);
+
+        com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException exception =
+                assertThrows(
+                        com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException
+                                .class,
+                        () -> {
+                            orderApplicationService.createOrder(command2);
+                        });
+
+        assertTrue(exception.getMessage().contains("ORDER-DUPLICATE"));
+        assertTrue(exception.getMessage().contains("already exists"));
+    }
 }
