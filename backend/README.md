@@ -992,14 +992,17 @@ class OrderObserver {
   +observerId
   +sourceEndpoint: SourceEndpoint
   +pollingInterval: PollingInterval
+  +lastPolledTimestamp
   --
   +pollOrderSource()
+  +updateLastPolledTimestamp()
 }
 
 class SourceEndpoint {
   <<ValueObject>>
-  +url
-  +authToken
+  +jdbcUrl
+  +username
+  +password
 }
 
 class PollingInterval {
@@ -1007,8 +1010,18 @@ class PollingInterval {
   +seconds
 }
 
+class ObservationResult {
+  <<ValueObject>>
+  +orderId
+  +orderType
+  +warehouseId
+  +status
+  +observedAt
+}
+
 OrderObserver --> SourceEndpoint
 OrderObserver --> PollingInterval
+OrderObserver --> ObservationResult
 
 class InventoryObserver {
   +observerId
