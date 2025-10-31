@@ -2,25 +2,28 @@ package com.wei.orchestrator.integration.order.infrastructure.repository;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.wei.orchestrator.integration.BaseIntegrationTest;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.ReservationInfo;
 import com.wei.orchestrator.order.domain.model.ShipmentInfo;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
-import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.order.infrastructure.repository.OrderRepositoryImpl;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
-@Transactional
-class OrderRepositoryIntegrationTest extends BaseIntegrationTest {
+@ActiveProfiles("test")
+@DataJpaTest
+@Import(OrderRepositoryImpl.class)
+class OrderRepositoryIntegrationTest {
 
-    @Autowired private OrderRepository orderRepository;
+    @Autowired private OrderRepositoryImpl orderRepository;
 
     @Test
     void shouldSaveAndFindOrderById() {
