@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  oracle-db:
+    image: gvenzl/oracle-free:23-slim
+    container_name: wei-oracle-db
+    environment:
+      ORACLE_PASSWORD: oracle123
+      APP_USER: orchestrator
+      APP_USER_PASSWORD: orchestrator123
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  oracle-data:
