@@ -21,7 +21,6 @@ import org.springframework.stereotype.Repository;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-@Transactional
 @ActiveProfiles("test")
 @DataJpaTest(
         includeFilters =

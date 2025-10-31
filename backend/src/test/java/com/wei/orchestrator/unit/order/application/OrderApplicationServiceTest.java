@@ -14,6 +14,7 @@ import com.wei.orchestrator.order.domain.service.OrderDomainService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,93 +30,105 @@ class OrderApplicationServiceTest {
 
     @InjectMocks private OrderApplicationService orderApplicationService;
 
-    @Test
-    void shouldCreateOrderSuccessfully() {
-        List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
-        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-001", 10, new BigDecimal("100.00")));
-        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-002", 5, new BigDecimal("50.00")));
+    @Nested
+    class createOrderTest {
 
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-001", items);
+        @Test
+        void shouldCreateOrderSuccessfully() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto(
+                            "SKU-001", 10, new BigDecimal("100.00")));
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-002", 5, new BigDecimal("50.00")));
 
-        when(orderRepository.save(any(Order.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            CreateOrderCommand command = new CreateOrderCommand("ORDER-001", items);
 
-        Order createdOrder = orderApplicationService.createOrder(command);
+            when(orderRepository.save(any(Order.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertNotNull(createdOrder);
-        assertEquals("ORDER-001", createdOrder.getOrderId());
-        assertEquals(OrderStatus.CREATED, createdOrder.getStatus());
-        assertEquals(2, createdOrder.getOrderLineItems().size());
-        assertEquals("SKU-001", createdOrder.getOrderLineItems().get(0).getSku());
-        assertEquals(10, createdOrder.getOrderLineItems().get(0).getQuantity());
+            Order createdOrder = orderApplicationService.createOrder(command);
 
-        verify(orderRepository, times(1)).save(any(Order.class));
-    }
+            assertNotNull(createdOrder);
+            assertEquals("ORDER-001", createdOrder.getOrderId());
+            assertEquals(OrderStatus.CREATED, createdOrder.getStatus());
+            assertEquals(2, createdOrder.getOrderLineItems().size());
+            assertEquals("SKU-001", createdOrder.getOrderLineItems().get(0).getSku());
+            assertEquals(10, createdOrder.getOrderLineItems().get(0).getQuantity());
 
-    @Test
-    void shouldThrowExceptionWhenCreatingCommandWithEmptyItems() {
-        IllegalArgumentException exception =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> {
-                            new CreateOrderCommand("ORDER-002", new ArrayList<>());
-                        });
+            verify(orderRepository, times(1)).save(any(Order.class));
+        }
 
-        assertTrue(exception.getMessage().contains("Order must have at least one item"));
-    }
+        @Test
+        void shouldThrowExceptionWhenCreatingCommandWithEmptyItems() {
+            IllegalArgumentException exception =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> {
+                                new CreateOrderCommand("ORDER-002", new ArrayList<>());
+                            });
 
-    @Test
-    void shouldConvertCommandDtoToDomainModel() {
-        List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
-        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-100", 3, new BigDecimal("30.50")));
+            assertTrue(exception.getMessage().contains("Order must have at least one item"));
+        }
 
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-003", items);
+        @Test
+        void shouldConvertCommandDtoToDomainModel() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-100", 3, new BigDecimal("30.50")));
 
-        when(orderRepository.save(any(Order.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+            CreateOrderCommand command = new CreateOrderCommand("ORDER-003", items);
 
-        Order createdOrder = orderApplicationService.createOrder(command);
+            when(orderRepository.save(any(Order.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertEquals("SKU-100", createdOrder.getOrderLineItems().get(0).getSku());
-        assertEquals(3, createdOrder.getOrderLineItems().get(0).getQuantity());
-        assertEquals(new BigDecimal("30.50"), createdOrder.getOrderLineItems().get(0).getPrice());
-    }
+            Order createdOrder = orderApplicationService.createOrder(command);
 
-    @Test
-    void shouldCallRepositorySaveExactlyOnce() {
-        List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
-        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-100", 3, new BigDecimal("30.50")));
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-004", items);
+            assertEquals("SKU-100", createdOrder.getOrderLineItems().get(0).getSku());
+            assertEquals(3, createdOrder.getOrderLineItems().get(0).getQuantity());
+            assertEquals(
+                    new BigDecimal("30.50"), createdOrder.getOrderLineItems().get(0).getPrice());
+        }
 
-        when(orderRepository.save(any(Order.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        @Test
+        void shouldCallRepositorySaveExactlyOnce() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-100", 3, new BigDecimal("30.50")));
+            CreateOrderCommand command = new CreateOrderCommand("ORDER-004", items);
 
-        orderApplicationService.createOrder(command);
+            when(orderRepository.save(any(Order.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
 
-        verify(orderRepository, times(1)).save(any(Order.class));
-        verifyNoMoreInteractions(orderRepository);
-    }
+            orderApplicationService.createOrder(command);
 
-    @Test
-    void shouldThrowExceptionWhenOrderIdAlreadyExists() {
-        List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
-        items.add(new CreateOrderCommand.OrderLineItemDto("SKU-001", 10, new BigDecimal("100.00")));
-        CreateOrderCommand command = new CreateOrderCommand("ORDER-005", items);
+            verify(orderRepository, times(1)).save(any(Order.class));
+            verifyNoMoreInteractions(orderRepository);
+        }
 
-        doThrow(new OrderAlreadyExistsException("Order with ID ORDER-005 already exists"))
-                .when(orderDomainService)
-                .validateOrderCreation("ORDER-005");
+        @Test
+        void shouldThrowExceptionWhenOrderIdAlreadyExists() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto(
+                            "SKU-001", 10, new BigDecimal("100.00")));
+            CreateOrderCommand command = new CreateOrderCommand("ORDER-005", items);
 
-        OrderAlreadyExistsException exception =
-                assertThrows(
-                        OrderAlreadyExistsException.class,
-                        () -> {
-                            orderApplicationService.createOrder(command);
-                        });
+            doThrow(new OrderAlreadyExistsException("Order with ID ORDER-005 already exists"))
+                    .when(orderDomainService)
+                    .validateOrderCreation("ORDER-005");
 
-        assertTrue(exception.getMessage().contains("ORDER-005"));
-        assertTrue(exception.getMessage().contains("already exists"));
-        verify(orderDomainService, times(1)).validateOrderCreation("ORDER-005");
-        verify(orderRepository, never()).save(any(Order.class));
+            OrderAlreadyExistsException exception =
+                    assertThrows(
+                            OrderAlreadyExistsException.class,
+                            () -> {
+                                orderApplicationService.createOrder(command);
+                            });
+
+            assertTrue(exception.getMessage().contains("ORDER-005"));
+            assertTrue(exception.getMessage().contains("already exists"));
+            verify(orderDomainService, times(1)).validateOrderCreation("ORDER-005");
+            verify(orderRepository, never()).save(any(Order.class));
+        }
     }
 }

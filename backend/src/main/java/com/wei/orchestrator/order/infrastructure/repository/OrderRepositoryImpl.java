@@ -6,8 +6,10 @@ import com.wei.orchestrator.order.infrastructure.mapper.OrderMapper;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderEntity;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
+@Transactional
 public class OrderRepositoryImpl implements OrderRepository {
 
     private final JpaOrderRepository jpaOrderRepository;
