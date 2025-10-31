@@ -36,7 +36,7 @@
 
 ### Order Polling 模組
 
-- 由 Orchestrator 系統定時（例如每 30 秒或 1 分鐘）呼叫 Order Source System API。
+- 由 Orchestrator 系統定時（例如每 30 秒或 1 分鐘）呼叫 Order Source System Database
 - 查詢新訂單（依狀態或建立時間區間）。
 - 對於每筆新訂單：
     1. 寫入 Orchestrator 的訂單暫存表（Order Buffer Table）。
@@ -48,10 +48,10 @@
 - 每筆訂單以 `order_id` 進行 idempotent 檢查。
 - 若偵測到重複訂單，忽略後續重複資料。
 - 訂單狀態設計：
-    - `NEW`：尚未處理
-    - `IN_PROGRESS`：處理中
-    - `COMPLETED`：已完成
-    - `FAILED`：處理失敗，待重試或人工介入
+  - `NEW`：尚未處理
+  - `IN_PROGRESS`：處理中
+  - `COMPLETED`：已完成
+  - `FAILED`：處理失敗，待重試或人工介入
 
 #### 輪詢頻率與效能考量
 
@@ -223,6 +223,7 @@
 適用於由 Inventory 系統與WES之間某SKU差異過大的時候。
 
 **流程步驟：**
+
 1. Operatro去盤點
 2. 盤點完成之後更新Inventory 庫存以及 WES庫存
 
@@ -247,6 +248,7 @@
 - 若發現任務長時間未更新，可觸發異常警報或人工介入。
 
 此策略可確保：
+
 - 任務狀態一致性。
 - 降低外部系統誤觸發風險。
 - 便於重試與追蹤。
@@ -275,6 +277,7 @@
 
 本章節說明系統中的核心 Aggregate 設計與責任劃分。
 系統整體由多個 Context 組成，包含：
+
 - **Order Context**
 - **Inventory Context**
 - **WES Context**
@@ -292,7 +295,6 @@
 | **OrderObserver**       | Observation Context  | 觀察外部訂單來源系統，偵測新訂單或狀態變化，發佈對應的觀察事件                     | `ObservationPolicy`, `ObservationResult`   |
 | **InventoryObserver**   | Observation Context  | 定期比對內外部庫存數據，偵測差異並產生同步事件                                 | `StockSnapshot`, `ObservationResult`       |
 | **WesObserver**         | Observation Context  | 監控 WES 任務執行情況與 API 狀態，回報異常與延遲資訊                           | `ObservationTask`, `ObservationEvent`      |
-
 
 ## ⚙️ Aggregate Relationships Overview
 
@@ -749,62 +751,63 @@ OBE1 --> AL
 OBE2 --> AL
 OBE3 --> AL
 ```
+
 --
 
 ### 🟦 1. Observation Context
 
-* 定期輪詢上游資料源（例如 ERP / WES / WMS）。
-* 當偵測到新訂單或庫存異常，觸發對應事件：
+- 定期輪詢上游資料源（例如 ERP / WES / WMS）。
+- 當偵測到新訂單或庫存異常，觸發對應事件：
 
-    * `NewOrderObserved` → 觸發 `CreateOrder`
-    * `InventorySnapshotObserved` → 觸發 `DetectDiscrepancy`
-    * `WesTaskStatusUpdated` → 觸發 `UpdateTaskStatus`
+  - `NewOrderObserved` → 觸發 `CreateOrder`
+  - `InventorySnapshotObserved` → 觸發 `DetectDiscrepancy`
+  - `WesTaskStatusUpdated` → 觸發 `UpdateTaskStatus`
 
 ---
 
 ### 🟧 2. Order Context
 
-* 收到 `NewOrderObserved` 後建立 `Order`。
-* 預約庫存 (`ReserveInventory`) → 由 Inventory Context 執行。
-* 出貨完成後 (`OrderCommitted`、`OrderShipped`) 通知 Audit Logging。
+- 收到 `NewOrderObserved` 後建立 `Order`。
+- 預約庫存 (`ReserveInventory`) → 由 Inventory Context 執行。
+- 出貨完成後 (`OrderCommitted`、`OrderShipped`) 通知 Audit Logging。
 
 ---
 
 ### 🟨 3. WES Context
 
-* `CreatePickingTask` 由 Order Context 觸發。
-* 任務完成 (`PickingTaskCompleted`) 後，觸發 Inventory 出庫 (`CreateOutboundTransaction`)。
-* 任務異常 (`PickingTaskFailed`) 則回報 Audit。
+- `CreatePickingTask` 由 Order Context 觸發。
+- 任務完成 (`PickingTaskCompleted`) 後，觸發 Inventory 出庫 (`CreateOutboundTransaction`)。
+- 任務異常 (`PickingTaskFailed`) 則回報 Audit。
 
 ---
 
 ### 🟩 4. Inventory Context
 
-* `InventoryTransaction` 處理所有入庫、出庫交易。
-* `InventoryAdjustment` 處理庫存差異。
-* `ReturnTask` 處理回庫與退貨。
-* 所有異動事件（Increased / Decreased / Adjusted）皆被 Audit 記錄。
+- `InventoryTransaction` 處理所有入庫、出庫交易。
+- `InventoryAdjustment` 處理庫存差異。
+- `ReturnTask` 處理回庫與退貨。
+- 所有異動事件（Increased / Decreased / Adjusted）皆被 Audit 記錄。
 
 ---
 
 ### 🟪 5. Audit Logging
 
-* 為 **全域訂閱者 (Event Subscriber)**。
-* 訂閱所有 `DomainEvent`。
-* 記錄：
+- 為 **全域訂閱者 (Event Subscriber)**。
+- 訂閱所有 `DomainEvent`。
+- 記錄：
 
-    * Aggregate ID
-    * Command / Event Type
-    * Timestamp
-    * Payload（含來源 Context）
+  - Aggregate ID
+  - Command / Event Type
+  - Timestamp
+  - Payload（含來源 Context）
 
 ## ⚙️ 延伸建議
 
 若要實作此事件流：
 
-* 使用 **Event Bus（例如 Spring ApplicationEventPublisher / Kafka）**。
-* 各 Context 不直接依賴彼此，而是透過事件通訊。
-* `AuditLogSubscriber` 可以 async 模式記錄，不影響主流程性能。
+- 使用 **Event Bus（例如 Spring ApplicationEventPublisher / Kafka）**。
+- 各 Context 不直接依賴彼此，而是透過事件通訊。
+- `AuditLogSubscriber` 可以 async 模式記錄，不影響主流程性能。
 
 --
 

@@ -2,7 +2,7 @@ spring:
   application:
     name: orchestrator
   datasource:
-    url: jdbc:oracle:thin:@localhost:1521/XEPDB1
+    url: jdbc:oracle:thin:@localhost:1521/FREEPDB1
     username: orchestrator
     password: orchestrator123
     driver-class-name: oracle.jdbc.OracleDriver
