@@ -10,7 +10,7 @@ try {
 const dbConfig = {
   user: process.env.DB_USER || 'order_source',
   password: process.env.DB_PASSWORD || 'ordersource123',
-  connectString: process.env.DB_CONNECTION_STRING || 'localhost:1521/XEPDB1',
+  connectString: process.env.DB_CONNECTION_STRING || 'localhost:1521/FREEPDB1',
   poolMin: parseInt(process.env.DB_POOL_MIN) || 2,
   poolMax: parseInt(process.env.DB_POOL_MAX) || 10,
   poolIncrement: parseInt(process.env.DB_POOL_INCREMENT) || 2,
