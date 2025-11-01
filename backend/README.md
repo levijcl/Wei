@@ -292,7 +292,7 @@
 | **InventoryTransaction**| Inventory Context    | 表示庫存異動（入庫、出庫、調撥等），是實際改變庫存數量的行為主體                | `InventoryItem`, `MovementType`, `TransactionLine` |
 | **InventoryAdjustment** | Inventory Context    | 偵測與修正庫存差異，建立對應的 `InventoryTransaction` 校正庫存                | `StockSnapshot`, `DiscrepancyLog`          |
 | **ReturnTask**          | Inventory Context    | 管理退貨或回庫作業流程，最終生成入庫類型的 `InventoryTransaction`              | `InboundTask`, `RestockAction`             |
-| **OrderObserver**       | Observation Context  | 觀察外部訂單來源系統，偵測新訂單或狀態變化，發佈對應的觀察事件                     | `ObservationPolicy`, `ObservationResult`   |
+| **OrderObserver**       | Observation Context  | 觀察外部訂單來源資料庫（Oracle），透過 OrderSourcePort 查詢新訂單完整資料，內部收集 NewOrderObservedEvent 並發佈 | `SourceEndpoint`, `PollingInterval`, `ObservationResult`, `ObservedOrderItem` |
 | **InventoryObserver**   | Observation Context  | 定期比對內外部庫存數據，偵測差異並產生同步事件                                 | `StockSnapshot`, `ObservationResult`       |
 | **WesObserver**         | Observation Context  | 監控 WES 任務執行情況與 API 狀態，回報異常與延遲資訊                           | `ObservationTask`, `ObservationEvent`      |
 
@@ -453,10 +453,13 @@ OO -->|監控訂單來源| OR
 
 #### Aggregate: `OrderObserver`
 
-| 類型          | 名稱                  | 說明                         |
-| ----------- | ------------------- | -------------------------- |
-| **Command** | `PollOrderSource()` | 定期輪詢訂單來源系統                 |
-| **Event**   | `NewOrderObserved`  | 偵測到新訂單，發送事件給 Order Context |
+| 類型          | 名稱                                      | 說明                                       |
+| ----------- | --------------------------------------- | ---------------------------------------- |
+| **Command** | `CreateOrderObserver(observerData)`     | 建立新的訂單觀察者                                |
+| **Command** | `PollOrderSource(OrderSourcePort)`      | 定期輪詢訂單來源系統，透過 Port 查詢外部資料庫              |
+| **Command** | `ActivateObserver()`                    | 啟用觀察者                                    |
+| **Command** | `DeactivateObserver()`                  | 停用觀察者                                    |
+| **Event**   | `NewOrderObservedEvent(ObservationResult)` | 偵測到新訂單，包含完整訂單資料（客戶、品項等），發送給 Order Context |
 
 #### Aggregate: `InventoryObserver`
 
@@ -581,12 +584,10 @@ src/
                     │
                     ├── observation/
                     │   ├── application/
-                    │   │   ├── ObservationScheduler.java
-                    │   │   ├── PollingCoordinator.java
+                    │   │   ├── OrderObserverApplicationService.java
                     │   │   └── command/
-                    │   │       ├── PollOrderSourceCommand.java
-                    │   │       ├── PollInventorySnapshotCommand.java
-                    │   │       └── PollWesStatusCommand.java
+                    │   │       ├── CreateOrderObserverCommand.java
+                    │   │       └── PollOrderSourceCommand.java
                     │   ├── domain/
                     │   │   ├── model/
                     │   │   │   ├── OrderObserver.java
@@ -595,17 +596,26 @@ src/
                     │   │   │   └── valueobject/
                     │   │   │       ├── SourceEndpoint.java
                     │   │   │       ├── PollingInterval.java
+                    │   │   │       ├── ObservationResult.java
+                    │   │   │       ├── ObservedOrderItem.java
                     │   │   │       └── ObservationRule.java
                     │   │   ├── event/
-                    │   │   │   ├── OrderSourcePolledEvent.java
+                    │   │   │   ├── NewOrderObservedEvent.java
                     │   │   │   └── WesTaskPolledEvent.java
+                    │   │   ├── port/
+                    │   │   │   └── OrderSourcePort.java
                     │   │   └── repository/
-                    │   │       └── ObserverRepository.java
+                    │   │       └── OrderObserverRepository.java
                     │   └── infrastructure/
-                    │       ├── http/
-                    │       │   └── ExternalApiClient.java
-                    │       └── scheduler/
-                    │           └── PollingJobConfig.java
+                    │       ├── adapter/
+                    │       │   └── ExternalOrderSourceAdapter.java
+                    │       ├── mapper/
+                    │       │   └── OrderObserverMapper.java
+                    │       ├── persistence/
+                    │       │   └── OrderObserverEntity.java
+                    │       └── repository/
+                    │           ├── JpaOrderObserverRepository.java
+                    │           └── OrderObserverRepositoryImpl.java
                     │
                     └── shared/
                         ├── domain/
@@ -992,14 +1002,23 @@ class OrderObserver {
   +observerId
   +sourceEndpoint: SourceEndpoint
   +pollingInterval: PollingInterval
+  +lastPolledTimestamp
+  +active
+  +List~Object~ domainEvents
   --
-  +pollOrderSource()
+  +pollOrderSource(OrderSourcePort)
+  +getDomainEvents()
+  +clearDomainEvents()
+  +activate()
+  +deactivate()
+  +shouldPoll()
 }
 
 class SourceEndpoint {
   <<ValueObject>>
-  +url
-  +authToken
+  +jdbcUrl
+  +username
+  +password
 }
 
 class PollingInterval {
@@ -1007,8 +1026,30 @@ class PollingInterval {
   +seconds
 }
 
+class ObservationResult {
+  <<ValueObject>>
+  +orderId
+  +customerName
+  +customerEmail
+  +shippingAddress
+  +orderType
+  +warehouseId
+  +status
+  +List~ObservedOrderItem~ items
+  +observedAt
+}
+
+class ObservedOrderItem {
+  <<ValueObject>>
+  +sku
+  +productName
+  +quantity
+  +price
+}
+
 OrderObserver --> SourceEndpoint
 OrderObserver --> PollingInterval
+ObservationResult "1" --> "many" ObservedOrderItem
 
 class InventoryObserver {
   +observerId
