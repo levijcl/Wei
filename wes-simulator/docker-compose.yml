@@ -1,0 +1,67 @@
+services:
+  oracle-db:
+    image: gvenzl/oracle-free:23-slim
+    container_name: wes-oracle-db
+    environment:
+      ORACLE_PASSWORD: oracle123
+      APP_USER: wes_user
+      APP_USER_PASSWORD: wes123
+    ports:
+      - "1523:1521"
+    volumes:
+      - wes-oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - wes-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wes-backend
+    environment:
+      PORT: 3678
+      NODE_ENV: production
+      DB_USER: wes_user
+      DB_PASSWORD: wes123
+      DB_CONNECTION_STRING: oracle-db:1521/FREEPDB1
+      DB_POOL_MIN: 2
+      DB_POOL_MAX: 10
+      DB_POOL_INCREMENT: 2
+      SYSTEM_USER: system
+      SYSTEM_PASSWORD: oracle123
+    ports:
+      - "3678:3678"
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    networks:
+      - wes-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wes-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:3678/api
+    ports:
+      - "3679:80"
+    depends_on:
+      - backend
+    networks:
+      - wes-network
+    restart: unless-stopped
+
+volumes:
+  wes-oracle-data:
+
+networks:
+  wes-network:
+    driver: bridge
