@@ -13,30 +13,27 @@ import org.springframework.stereotype.Repository;
 public class OrderObserverRepositoryImpl implements OrderObserverRepository {
 
     private final JpaOrderObserverRepository jpaRepository;
-    private final OrderObserverMapper mapper;
 
-    public OrderObserverRepositoryImpl(
-            JpaOrderObserverRepository jpaRepository, OrderObserverMapper mapper) {
+    public OrderObserverRepositoryImpl(JpaOrderObserverRepository jpaRepository) {
         this.jpaRepository = jpaRepository;
-        this.mapper = mapper;
     }
 
     @Override
     public OrderObserver save(OrderObserver orderObserver) {
-        OrderObserverEntity entity = mapper.toEntity(orderObserver);
+        OrderObserverEntity entity = OrderObserverMapper.toEntity(orderObserver);
         OrderObserverEntity savedEntity = jpaRepository.save(entity);
-        return mapper.toDomain(savedEntity);
+        return OrderObserverMapper.toDomain(savedEntity);
     }
 
     @Override
     public Optional<OrderObserver> findById(String observerId) {
-        return jpaRepository.findById(observerId).map(mapper::toDomain);
+        return jpaRepository.findById(observerId).map(OrderObserverMapper::toDomain);
     }
 
     @Override
     public List<OrderObserver> findAllActive() {
         return jpaRepository.findByActiveTrue().stream()
-                .map(mapper::toDomain)
+                .map(OrderObserverMapper::toDomain)
                 .collect(Collectors.toList());
     }
 

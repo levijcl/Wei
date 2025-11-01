@@ -4,12 +4,10 @@ import com.wei.orchestrator.observation.domain.model.OrderObserver;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.SourceEndpoint;
 import com.wei.orchestrator.observation.infrastructure.persistence.OrderObserverEntity;
-import org.springframework.stereotype.Component;
 
-@Component
 public class OrderObserverMapper {
 
-    public OrderObserverEntity toEntity(OrderObserver domain) {
+    public static OrderObserverEntity toEntity(OrderObserver domain) {
         if (domain == null) {
             return null;
         }
@@ -33,7 +31,7 @@ public class OrderObserverMapper {
         return entity;
     }
 
-    public OrderObserver toDomain(OrderObserverEntity entity) {
+    public static OrderObserver toDomain(OrderObserverEntity entity) {
         if (entity == null) {
             return null;
         }
