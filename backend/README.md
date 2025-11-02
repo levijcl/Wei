@@ -740,36 +740,57 @@ src/
                     │   │       ├── CreatePickingTaskFromWesCommand.java
                     │   │       ├── CreatePutawayTaskForReturnCommand.java
                     │   │       ├── CreatePutawayTaskFromWesCommand.java
+                    │   │       ├── UpdateTaskStatusFromWesCommand.java
                     │   │       ├── AdjustTaskPriorityCommand.java
-                    │   │       └── AdjustOrderPriorityCommand.java
+                    │   │       ├── AdjustOrderPriorityCommand.java
+                    │   │       ├── MarkTaskCompletedCommand.java
+                    │   │       ├── MarkTaskFailedCommand.java
+                    │   │       └── CancelTaskCommand.java
                     │   ├── domain/
                     │   │   ├── model/
                     │   │   │   ├── PickingTask.java
-                    │   │   │   └── PutawayTask.java
+                    │   │   │   ├── PutawayTask.java
+                    │   │   │   └── valueobject/
+                    │   │   │       ├── WesTaskId.java
+                    │   │   │       ├── TaskItem.java
+                    │   │   │       ├── TaskStatus.java
+                    │   │   │       ├── TaskOrigin.java
+                    │   │   │       └── SourceType.java
                     │   │   ├── event/
                     │   │   │   ├── PickingTaskCreatedEvent.java
                     │   │   │   ├── PickingTaskSubmittedEvent.java
                     │   │   │   ├── PickingTaskCompletedEvent.java
+                    │   │   │   ├── PickingTaskFailedEvent.java
+                    │   │   │   ├── PickingTaskCanceledEvent.java
+                    │   │   │   ├── PickingTaskPriorityAdjustedEvent.java
                     │   │   │   ├── PutawayTaskCreatedEvent.java
                     │   │   │   ├── PutawayTaskSubmittedEvent.java
-                    │   │   │   └── PutawayTaskCompletedEvent.java
+                    │   │   │   ├── PutawayTaskCompletedEvent.java
+                    │   │   │   ├── PutawayTaskFailedEvent.java
+                    │   │   │   └── PutawayTaskPriorityAdjustedEvent.java
                     │   │   ├── repository/
                     │   │   │   ├── PickingTaskRepository.java
                     │   │   │   └── PutawayTaskRepository.java
                     │   │   ├── port/
                     │   │   │   └── WesPort.java
-                    │   │   └── valueobject/
-                    │   │       ├── WesTaskId.java
-                    │   │       ├── TaskItem.java
-                    │   │       ├── TaskStatus.java
-                    │   │       ├── TaskOrigin.java
-                    │   │       └── SourceType.java
+                    │   │   └── service/
+                    │   │       └── WesTaskDomainService.java
                     │   └── infrastructure/
-                    │       ├── adapter/
-                    │       │   └── WesHttpAdapter.java
-                    │       └── repository/
-                    │           ├── JpaPickingTaskRepository.java
-                    │           └── JpaPutawayTaskRepository.java
+                    │       ├── persistence/
+                    │       │   ├── PickingTaskEntity.java
+                    │       │   ├── PutawayTaskEntity.java
+                    │       │   └── TaskItemEntity.java
+                    │       ├── mapper/
+                    │       │   ├── PickingTaskMapper.java
+                    │       │   └── PutawayTaskMapper.java
+                    │       ├── repository/
+                    │       │   ├── JpaPickingTaskRepository.java
+                    │       │   ├── JpaPutawayTaskRepository.java
+                    │       │   ├── JpaTaskItemRepository.java
+                    │       │   ├── PickingTaskRepositoryImpl.java
+                    │       │   └── PutawayTaskRepositoryImpl.java
+                    │       └── adapter/
+                    │           └── WesHttpAdapter.java
                     │
                     ├── observation/
                     │   ├── application/
