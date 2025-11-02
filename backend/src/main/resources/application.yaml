@@ -20,3 +20,6 @@ scheduler:
     fixed-delay: 30000
   lock:
     ttl: 60000
+wes:
+  api:
+    base-url: http://localhost:3678
