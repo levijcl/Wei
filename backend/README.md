@@ -288,13 +288,13 @@
 | Aggregate               | 所屬 Context         | 責任                                                                 | 關聯物件                                       |
 | ----------------------- | -------------------- | -------------------------------------------------------------------- | ------------------------------------------ |
 | **Order**               | Order Context        | 表示出貨流程主體，包含狀態、任務鏈、對應的 reservation 與 logistics info | `OrderLineItem`, `Reservation`, `Shipment` |
-| **PickingTask**         | WES Context          | 對應 WES 的揀貨任務，負責管理任務狀態與回報                               | `TaskStatus`, `WesTaskId`                  |
-| **InventoryTransaction**| Inventory Context    | 表示庫存異動（入庫、出庫、調撥等），是實際改變庫存數量的行為主體                | `InventoryItem`, `MovementType`, `TransactionLine` |
+| **PickingTask**         | WES Context          | 管理揀貨任務（出庫），支援雙來源模型 (ORCHESTRATOR_SUBMITTED / WES_DIRECT)，完成時減少庫存 | `TaskItem`, `WesTaskId`, `TaskOrigin`, `TaskStatus` |
+| **PutawayTask**         | WES Context          | 管理上架任務（入庫），支援雙來源模型，完成時增加庫存，處理退貨與收貨場景 | `TaskItem`, `WesTaskId`, `TaskOrigin`, `SourceType` |
+| **InventoryTransaction**| Inventory Context    | 表示庫存異動（入庫、出庫、調撥等），是實際改變庫存數量的行為主體                | `TransactionLine`, `TransactionType`, `WarehouseLocation` |
 | **InventoryAdjustment** | Inventory Context    | 偵測與修正庫存差異，建立對應的 `InventoryTransaction` 校正庫存                | `StockSnapshot`, `DiscrepancyLog`          |
-| **ReturnTask**          | Inventory Context    | 管理退貨或回庫作業流程，最終生成入庫類型的 `InventoryTransaction`              | `InboundTask`, `RestockAction`             |
 | **OrderObserver**       | Observation Context  | 觀察外部訂單來源資料庫（Oracle），透過 OrderSourcePort 查詢新訂單完整資料，內部收集 NewOrderObservedEvent 並發佈 | `SourceEndpoint`, `PollingInterval`, `ObservationResult`, `ObservedOrderItem` |
 | **InventoryObserver**   | Observation Context  | 定期比對內外部庫存數據，偵測差異並產生同步事件                                 | `StockSnapshot`, `ObservationResult`       |
-| **WesObserver**         | Observation Context  | 監控 WES 任務執行情況與 API 狀態，回報異常與延遲資訊                           | `ObservationTask`, `ObservationEvent`      |
+| **WesObserver**         | Observation Context  | 持續輪詢 WES 系統，發現新任務 (task discovery) 並同步所有任務狀態，確保庫存一致性 | `TaskEndpoint`, `WesTaskDto`      |
 
 ## ⚙️ Aggregate Relationships Overview
 
@@ -312,7 +312,8 @@ end
 %% WES CONTEXT
 %% =========================
 subgraph WesContext["🏭 WES Context"]
-  PT[PickingTask]
+  PT[PickingTask<br/>揀貨任務 - 減少庫存]
+  PUT[PutawayTask<br/>上架任務 - 增加庫存]
 end
 
 %% =========================
@@ -321,7 +322,6 @@ end
 subgraph InventoryContext["🏬 Inventory Context"]
   IT[InventoryTransaction]
   IA[InventoryAdjustment]
-  RT[ReturnTask]
 end
 
 %% =========================
@@ -330,9 +330,15 @@ end
 subgraph ObservationContext["👁️ Observation Context"]
   OO[OrderObserver]
   IO[InventoryObserver]
-  WO[WesObserver]
+  WO[WesObserver<br/>任務發現 + 狀態同步]
 end
 
+%% =========================
+%% EXTERNAL SYSTEMS
+%% =========================
+subgraph ExternalSystems["🌐 External Systems"]
+  WES[WES System<br/>wes_tasks table]
+end
 
 %% =========================
 %% CROSS-CONTEXT INTERACTIONS
@@ -344,21 +350,33 @@ OO -->|偵測新訂單 / 發事件| OR
 %% Order → Inventory
 OR -->|建立 Reservation / Commit| IT
 
-%% Order → WES
+%% Order → WES (建立揀貨任務)
 OR -->|建立 Picking 任務| PT
 
-%% WES → Inventory (出貨完成時)
-PT -->|任務完成事件 / 回報出庫| IT
+%% PickingTask → Inventory (出庫完成時)
+PT -->|任務完成 / 減少庫存| IT
+
+%% PutawayTask → Inventory (入庫完成時)
+PUT -->|任務完成 / 增加庫存| IT
 
 %% WES → Inventory Adjustment (差異偵測)
 IO -->|偵測差異 / 觸發修正| IA
 IA -->|生成校正交易| IT
 
-%% 回庫任務流程
-RT -->|建立入庫交易| IT
+%% WesObserver 任務發現與同步
+WO -->|發現新任務<br/>ORCHESTRATOR_SUBMITTED| PT
+WO -->|發現新任務<br/>WES_DIRECT| PT
+WO -->|發現新任務<br/>ORCHESTRATOR_SUBMITTED| PUT
+WO -->|發現新任務<br/>WES_DIRECT| PUT
+WO -->|同步狀態| PT
+WO -->|同步狀態| PUT
+
+%% PickingTask/PutawayTask 與 WES 整合
+PT -.->|submitToWes<br/>WesPort| WES
+PUT -.->|submitToWes<br/>WesPort| WES
+WO -.->|pollAllTasks<br/>WesPort| WES
 
 %% Observation 觀察
-WO -->|監控任務狀態| PT
 IO -->|監控庫存快照| IA
 OO -->|監控訂單來源| OR
 
@@ -373,8 +391,8 @@ OO -->|監控訂單來源| OR
 | Context                 | Aggregate                                                   |
 | ----------------------- | ----------------------------------------------------------- |
 | **Order Context**       | `Order`                                                     |
-| **WES Context**         | `PickingTask`                                               |
-| **Inventory Context**   | `InventoryTransaction`, `InventoryAdjustment`, `ReturnTask` |
+| **WES Context**         | `PickingTask`, `PutawayTask`                                |
+| **Inventory Context**   | `InventoryTransaction`, `InventoryAdjustment`               |
 | **Observation Context** | `OrderObserver`, `InventoryObserver`, `WesObserver`         |
 
 ---
@@ -402,15 +420,155 @@ OO -->|監控訂單來源| OR
 
 ### 🏭 **WES Context**
 
-#### Aggregate: `PickingTask`
+WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務。
+本 Context 採用 **Customer-Supplier Pattern**，Orchestrator 為 Customer（上游），WES 為 Supplier（下游）。
+透過 **Anti-Corruption Layer (WesPort)** 隔離外部系統，確保領域模型純淨。
 
-| 類型          | 名稱                                    | 說明                               |
-| ----------- | ------------------------------------- | -------------------------------- |
-| **Command** | `CreatePickingTask(orderId, skuList)` | 建立 WES picking 任務                |
-| **Command** | `UpdateTaskStatus(status)`            | Polling 更新任務狀態                   |
-| **Event**   | `PickingTaskCreated`                  | 任務建立成功                           |
-| **Event**   | `PickingTaskCompleted`                | 任務完成（觸發 InventoryTransaction 出庫） |
-| **Event**   | `PickingTaskFailed`                   | 任務異常                             |
+**核心設計原則：**
+- **管理所有 WES 任務**（包含 orchestrator 提交的任務及 WES 系統直接建立的任務）
+- **雙來源模型 (Dual-Origin Model)**：區分任務來源 (ORCHESTRATOR_SUBMITTED vs WES_DIRECT)
+- **獨立的 Aggregate 設計**：PickingTask（出庫）與 PutawayTask（入庫）為獨立聚合根
+- **統一的 WesObserver**：透過 WesObserver 持續同步所有 WES 任務狀態，確保庫存一致性
+
+---
+
+#### Aggregate: `PickingTask` (揀貨任務)
+
+**責任：** 管理出庫揀貨任務，完成後**減少庫存**
+
+**設計要點：**
+- **Dual-Origin Model**：
+  - `ORCHESTRATOR_SUBMITTED`：由 orchestrator 為訂單建立的任務 (orderId 有值)
+  - `WES_DIRECT`：使用者直接在 WES 系統建立的任務 (orderId 為 null)
+- **Inventory Impact**：任務完成時觸發庫存扣減 (consume stock)
+- **Priority Management**：支援動態調整任務優先權 (1-10)
+- **One Order → Multiple Tasks**：一個訂單可建立多個揀貨任務
+
+**Aggregate 欄位：**
+- `taskId` (String) - Orchestrator 內部任務 ID
+- `wesTaskId` (WesTaskId) - WES 系統任務 ID (Value Object)
+- `orderId` (String, nullable) - 關聯的訂單 ID (若為 WES_DIRECT 則為 null)
+- `origin` (TaskOrigin) - 任務來源：ORCHESTRATOR_SUBMITTED | WES_DIRECT
+- `priority` (int) - 優先權 (1-10，數字越大優先權越高)
+- `status` (TaskStatus) - 任務狀態：PENDING | SUBMITTED | IN_PROGRESS | COMPLETED | FAILED
+- `taskItems` (List<TaskItem>) - 任務明細 (SKU, 數量, 儲位)
+- `createdAt`, `submittedAt`, `completedAt` (Timestamp)
+
+**Behaviors：**
+- `createForOrder(orderId, items, priority)` - 為訂單建立揀貨任務 (origin: ORCHESTRATOR_SUBMITTED)
+- `createFromWesTask(wesTask)` - 從 WES 發現的任務建立 (origin: WES_DIRECT)
+- `submitToWes(WesPort)` - 提交任務至 WES 系統，取得 wesTaskId
+- `updateStatusFromWes(newStatus)` - 由 WesObserver 同步 WES 狀態
+- `adjustPriority(newPriority)` - 調整任務優先權 (1-10)
+- `markCompleted()` - 標記完成，觸發庫存扣減
+- `markFailed(reason)` - 標記失敗
+
+| 類型          | 名稱                                         | 說明                                             |
+| ----------- | ------------------------------------------ | ---------------------------------------------- |
+| **Command** | `CreatePickingTaskForOrder(orderId, items, priority)` | 為訂單建立揀貨任務 (origin: ORCHESTRATOR_SUBMITTED)      |
+| **Command** | `CreatePickingTaskFromWes(wesTask)`        | 從 WES 發現的任務建立 PickingTask (origin: WES_DIRECT)   |
+| **Command** | `SubmitPickingTaskToWes(taskId)`           | 將任務提交至 WES 系統                                   |
+| **Command** | `UpdateTaskStatusFromWes(taskId, status)`  | WesObserver 同步 WES 狀態                           |
+| **Command** | `AdjustTaskPriority(taskId, newPriority)`  | 調整單一任務優先權                                        |
+| **Command** | `AdjustOrderPriority(orderId, newPriority, taskIds?)` | 調整訂單相關任務優先權（可批次或選擇性調整）                           |
+| **Event**   | `PickingTaskCreated`                       | 任務建立成功                                           |
+| **Event**   | `PickingTaskSubmitted`                     | 任務已提交至 WES (包含 wesTaskId)                       |
+| **Event**   | `PickingTaskCompleted`                     | 任務完成 → 觸發 InventoryTransaction (OUTBOUND，減少庫存)    |
+| **Event**   | `PickingTaskFailed`                        | 任務異常                                             |
+| **Event**   | `PickingTaskPriorityAdjusted`              | 優先權已調整                                           |
+
+---
+
+#### Aggregate: `PutawayTask` (上架任務)
+
+**責任：** 管理入庫上架任務，完成後**增加庫存**
+
+**設計要點：**
+- **Dual-Origin Model**：
+  - `ORCHESTRATOR_SUBMITTED`：由 orchestrator 為退貨/入庫建立的任務 (returnId/receivingId 有值)
+  - `WES_DIRECT`：使用者直接在 WES 系統建立的任務 (無關聯 ID)
+- **Inventory Impact**：任務完成時觸發庫存增加 (increase stock)
+- **Priority Management**：支援動態調整任務優先權 (1-10)
+- **Triggers**：退貨 (Return) 或收貨 (Receiving) 皆可觸發
+
+**Aggregate 欄位：**
+- `taskId` (String) - Orchestrator 內部任務 ID
+- `wesTaskId` (WesTaskId) - WES 系統任務 ID (Value Object)
+- `sourceId` (String, nullable) - 來源 ID (returnId 或 receivingId，若為 WES_DIRECT 則為 null)
+- `sourceType` (SourceType) - 來源類型：RETURN | RECEIVING | DIRECT
+- `origin` (TaskOrigin) - 任務來源：ORCHESTRATOR_SUBMITTED | WES_DIRECT
+- `priority` (int) - 優先權 (1-10)
+- `status` (TaskStatus) - 任務狀態：PENDING | SUBMITTED | IN_PROGRESS | COMPLETED | FAILED
+- `taskItems` (List<TaskItem>) - 任務明細
+- `createdAt`, `submittedAt`, `completedAt` (Timestamp)
+
+**Behaviors：**
+- `createForReturn(returnId, items, priority)` - 為退貨建立上架任務
+- `createForReceiving(receivingId, items, priority)` - 為收貨建立上架任務
+- `createFromWesTask(wesTask)` - 從 WES 發現的任務建立 (origin: WES_DIRECT)
+- `submitToWes(WesPort)` - 提交任務至 WES 系統
+- `updateStatusFromWes(newStatus)` - 由 WesObserver 同步 WES 狀態
+- `adjustPriority(newPriority)` - 調整任務優先權
+- `markCompleted()` - 標記完成，觸發庫存增加
+- `markFailed(reason)` - 標記失敗
+
+| 類型          | 名稱                                         | 說明                                             |
+| ----------- | ------------------------------------------ | ---------------------------------------------- |
+| **Command** | `CreatePutawayTaskForReturn(returnId, items, priority)` | 為退貨建立上架任務 (origin: ORCHESTRATOR_SUBMITTED)         |
+| **Command** | `CreatePutawayTaskForReceiving(receivingId, items, priority)` | 為收貨建立上架任務 (origin: ORCHESTRATOR_SUBMITTED)         |
+| **Command** | `CreatePutawayTaskFromWes(wesTask)`        | 從 WES 發現的任務建立 PutawayTask (origin: WES_DIRECT)     |
+| **Command** | `SubmitPutawayTaskToWes(taskId)`           | 將任務提交至 WES 系統                                   |
+| **Command** | `UpdateTaskStatusFromWes(taskId, status)`  | WesObserver 同步 WES 狀態                           |
+| **Command** | `AdjustTaskPriority(taskId, newPriority)`  | 調整單一任務優先權                                        |
+| **Event**   | `PutawayTaskCreated`                       | 任務建立成功                                           |
+| **Event**   | `PutawayTaskSubmitted`                     | 任務已提交至 WES (包含 wesTaskId)                       |
+| **Event**   | `PutawayTaskCompleted`                     | 任務完成 → 觸發 InventoryTransaction (INBOUND，增加庫存)     |
+| **Event**   | `PutawayTaskFailed`                        | 任務異常                                             |
+| **Event**   | `PutawayTaskPriorityAdjusted`              | 優先權已調整                                           |
+
+---
+
+#### Port Interface: `WesPort`
+
+**Anti-Corruption Layer** 隔離外部 WES 系統
+
+```java
+interface WesPort {
+    WesTaskId submitPickingTask(PickingTask task);
+    WesTaskId submitPutawayTask(PutawayTask task);
+    WesTaskStatus getTaskStatus(WesTaskId wesTaskId);
+    List<WesTaskDto> pollAllTasks();  // 用於 WesObserver
+    void updateTaskPriority(WesTaskId wesTaskId, int priority);
+    void cancelTask(WesTaskId wesTaskId);
+}
+```
+
+---
+
+#### Priority Management (優先權管理)
+
+**場景 1: 調整單一任務優先權**
+```
+Command: AdjustTaskPriority(taskId, newPriority)
+→ PickingTask/PutawayTask.adjustPriority(newPriority)
+→ WesPort.updateTaskPriority(wesTaskId, newPriority)
+→ Event: TaskPriorityAdjusted
+```
+
+**場景 2: 調整訂單相關所有任務優先權（批次）**
+```
+Command: AdjustOrderPriority(orderId, newPriority, applyToAll=true)
+→ Query: 查詢所有 orderId 相關的 PickingTask
+→ 批次調整所有任務優先權
+→ 批次呼叫 WesPort.updateTaskPriority()
+```
+
+**場景 3: 選擇性調整訂單任務優先權**
+```
+Command: AdjustOrderPriority(orderId, newPriority, taskIds=[id1, id2])
+→ 僅調整指定的 taskIds
+→ 允許使用者靈活控制優先權
+```
 
 ---
 
@@ -438,17 +596,6 @@ OO -->|監控訂單來源| OR
 | **Event**   | `InventoryDiscrepancyDetected`            | 發現庫存差異      |
 | **Event**   | `InventoryAdjusted`                       | 差異修正完成      |
 
----
-
-#### Aggregate: `ReturnTask`
-
-| 類型          | 名稱                                   | 說明                               |
-| ----------- | ------------------------------------ | -------------------------------- |
-| **Command** | `CreateReturnTask(orderId, skuList)` | 建立回庫任務                           |
-| **Command** | `ConfirmReturnReceived()`            | 確認回庫完成                           |
-| **Event**   | `ReturnTaskCreated`                  | 任務建立成功                           |
-| **Event**   | `ReturnTaskCompleted`                | 回庫完成（觸發 InventoryTransaction 入庫） |
-
 ### 👁️ **Observation Context**
 
 #### Aggregate: `OrderObserver`
@@ -471,10 +618,30 @@ OO -->|監控訂單來源| OR
 
 #### Aggregate: `WesObserver`
 
+**責任：** 持續輪詢 WES 系統，發現新任務並同步所有任務狀態，確保 orchestrator 與 WES 的庫存一致性
+
+**核心功能：**
+- **任務發現 (Task Discovery)**：偵測 WES 系統中直接建立的任務 (WES_DIRECT)
+- **狀態同步 (Status Sync)**：更新 orchestrator 中 PickingTask/PutawayTask 的狀態
+- **庫存一致性保障**：確保所有 WES 任務完成時都能正確觸發庫存異動
+
+**輪詢邏輯：**
+```
+1. 呼叫 WesPort.pollAllTasks() 取得所有 WES 任務
+2. 對每個 WES 任務：
+   a. 查詢 orchestrator 中是否存在對應的 PickingTask/PutawayTask (by wesTaskId)
+   b. 若存在 → 更新狀態 (UpdateTaskStatusFromWes)
+   c. 若不存在 → 建立新 aggregate (CreatePickingTaskFromWes / CreatePutawayTaskFromWes)
+      - origin: WES_DIRECT
+      - orderId/sourceId: null
+3. 發佈事件 (WesTaskDiscovered, WesTaskStatusUpdated)
+```
+
 | 類型          | 名稱                     | 說明                     |
 | ----------- | ---------------------- | ---------------------- |
-| **Command** | `PollWesTaskStatus()`  | 輪詢 WES 任務狀態            |
-| **Event**   | `WesTaskStatusUpdated` | 任務狀態更新（通知 PickingTask） |
+| **Command** | `PollWesTaskStatus()`  | 輪詢 WES 所有任務狀態（PICKING + PUTAWAY） |
+| **Event**   | `WesTaskDiscovered`    | 發現 WES 系統中的新任務（觸發建立 PickingTask/PutawayTask）|
+| **Event**   | `WesTaskStatusUpdated` | 任務狀態更新（通知 PickingTask/PutawayTask） |
 
 --
 
@@ -535,13 +702,13 @@ src/
                     │   │   ├── InventoryApplicationService.java
                     │   │   └── command/
                     │   │       ├── CreateInboundTransactionCommand.java
+                    │   │       ├── CreateOutboundTransactionCommand.java
                     │   │       ├── DetectDiscrepancyCommand.java
                     │   │       └── ResolveDiscrepancyCommand.java
                     │   ├── domain/
                     │   │   ├── model/
                     │   │   │   ├── InventoryTransaction.java
                     │   │   │   ├── InventoryAdjustment.java
-                    │   │   │   ├── ReturnTask.java
                     │   │   │   ├── TransactionLine.java
                     │   │   │   └── valueobject/
                     │   │   │       ├── TransactionType.java
@@ -549,6 +716,8 @@ src/
                     │   │   │       └── WarehouseLocation.java
                     │   │   ├── event/
                     │   │   │   ├── InventoryAdjustedEvent.java
+                    │   │   │   ├── InventoryIncreasedEvent.java
+                    │   │   │   ├── InventoryDecreasedEvent.java
                     │   │   │   └── TransactionPostedEvent.java
                     │   │   ├── repository/
                     │   │   │   └── InventoryRepository.java
@@ -560,27 +729,47 @@ src/
                     │       ├── mapper/
                     │       │   └── InventoryMapper.java
                     │       └── adapter/
-                    │           └── ExternalWmsAdapter.java
+                    │           └── ExternalInventoryAdapter.java
                     │
                     ├── wes/
                     │   ├── application/
-                    │   │   ├── WesTaskApplicationService.java
+                    │   │   ├── PickingTaskApplicationService.java
+                    │   │   ├── PutawayTaskApplicationService.java
                     │   │   └── command/
-                    │   │       └── SyncPickingTaskCommand.java
+                    │   │       ├── CreatePickingTaskForOrderCommand.java
+                    │   │       ├── CreatePickingTaskFromWesCommand.java
+                    │   │       ├── CreatePutawayTaskForReturnCommand.java
+                    │   │       ├── CreatePutawayTaskFromWesCommand.java
+                    │   │       ├── AdjustTaskPriorityCommand.java
+                    │   │       └── AdjustOrderPriorityCommand.java
                     │   ├── domain/
                     │   │   ├── model/
-                    │   │   │   └── PickingTask.java
+                    │   │   │   ├── PickingTask.java
+                    │   │   │   └── PutawayTask.java
                     │   │   ├── event/
-                    │   │   │   └── PickingTaskUpdatedEvent.java
+                    │   │   │   ├── PickingTaskCreatedEvent.java
+                    │   │   │   ├── PickingTaskSubmittedEvent.java
+                    │   │   │   ├── PickingTaskCompletedEvent.java
+                    │   │   │   ├── PutawayTaskCreatedEvent.java
+                    │   │   │   ├── PutawayTaskSubmittedEvent.java
+                    │   │   │   └── PutawayTaskCompletedEvent.java
                     │   │   ├── repository/
-                    │   │   │   └── PickingTaskRepository.java
+                    │   │   │   ├── PickingTaskRepository.java
+                    │   │   │   └── PutawayTaskRepository.java
+                    │   │   ├── port/
+                    │   │   │   └── WesPort.java
                     │   │   └── valueobject/
-                    │   │       └── WesTaskId.java
+                    │   │       ├── WesTaskId.java
+                    │   │       ├── TaskItem.java
+                    │   │       ├── TaskStatus.java
+                    │   │       ├── TaskOrigin.java
+                    │   │       └── SourceType.java
                     │   └── infrastructure/
                     │       ├── adapter/
-                    │       │   └── WesHttpClient.java
+                    │       │   └── WesHttpAdapter.java
                     │       └── repository/
-                    │           └── JpaPickingTaskRepository.java
+                    │           ├── JpaPickingTaskRepository.java
+                    │           └── JpaPutawayTaskRepository.java
                     │
                     ├── observation/
                     │   ├── application/
@@ -683,15 +872,12 @@ subgraph INV[Inventory Context]
     IC3[ApplyAdjustment Command]
     IC4[DetectDiscrepancy Command]
     IC5[ResolveDiscrepancy Command]
-    IC6[CreateReturnTask Command]
 
     IE1[InventoryIncreased Event]
     IE2[InventoryDecreased Event]
     IE3[InventoryTransactionCompleted Event]
     IE4[InventoryDiscrepancyDetected Event]
     IE5[InventoryAdjusted Event]
-    IE6[ReturnTaskCreated Event]
-    IE7[ReturnTaskCompleted Event]
 end
 
 %% ===== Observation Context =====
@@ -736,7 +922,6 @@ IC2 --> IE2 --> IE3
 IC3 --> IE5 --> AL
 IC4 --> IE4 --> IC5
 IC5 --> IE5 --> AL
-IC6 --> IE6 --> IE7 --> IC1
 
 %% Observation - Inventory
 OB2 --> OBE2 --> IC4
@@ -755,8 +940,6 @@ IE2 --> AL
 IE3 --> AL
 IE4 --> AL
 IE5 --> AL
-IE6 --> AL
-IE7 --> AL
 OBE1 --> AL
 OBE2 --> AL
 OBE3 --> AL
@@ -876,17 +1059,65 @@ Order --> OrderStatus
 %%  WES Context
 %% ===========================
 class PickingTask {
-  +taskId
-  +status: TaskStatus
+  +taskId: String
   +wesTaskId: WesTaskId
+  +orderId: String (nullable)
+  +origin: TaskOrigin
+  +priority: int (1-10)
+  +status: TaskStatus
+  +List~TaskItem~ items
+  +createdAt, submittedAt, completedAt
   --
-  +createPickingTask()
-  +updateTaskStatus()
+  +createForOrder()
+  +createFromWesTask()
+  +submitToWes()
+  +updateStatusFromWes()
+  +adjustPriority()
+  +markCompleted()
+  +markFailed()
+}
+
+class PutawayTask {
+  +taskId: String
+  +wesTaskId: WesTaskId
+  +sourceId: String (nullable)
+  +sourceType: SourceType
+  +origin: TaskOrigin
+  +priority: int (1-10)
+  +status: TaskStatus
+  +List~TaskItem~ items
+  +createdAt, submittedAt, completedAt
+  --
+  +createForReturn()
+  +createForReceiving()
+  +createFromWesTask()
+  +submitToWes()
+  +updateStatusFromWes()
+  +adjustPriority()
+  +markCompleted()
+  +markFailed()
+}
+
+class TaskItem {
+  <<ValueObject>>
+  +sku: String
+  +quantity: int
+  +location: String
 }
 
 class TaskStatus {
   <<ValueObject>>
-  +status: PENDING | IN_PROGRESS | COMPLETED | FAILED
+  +status: PENDING | SUBMITTED | IN_PROGRESS | COMPLETED | FAILED
+}
+
+class TaskOrigin {
+  <<ValueObject>>
+  +origin: ORCHESTRATOR_SUBMITTED | WES_DIRECT
+}
+
+class SourceType {
+  <<ValueObject>>
+  +type: RETURN | RECEIVING | DIRECT
 }
 
 class WesTaskId {
@@ -894,8 +1125,16 @@ class WesTaskId {
   +value: String
 }
 
+PickingTask "1" --> "many" TaskItem
 PickingTask --> TaskStatus
+PickingTask --> TaskOrigin
 PickingTask --> WesTaskId
+
+PutawayTask "1" --> "many" TaskItem
+PutawayTask --> TaskStatus
+PutawayTask --> TaskOrigin
+PutawayTask --> SourceType
+PutawayTask --> WesTaskId
 
 %% ===========================
 %%  Inventory Context
@@ -966,33 +1205,6 @@ class DiscrepancyLog {
 
 InventoryAdjustment --> StockSnapshot
 InventoryAdjustment "1" --> "many" DiscrepancyLog
-
-%% --- ReturnTask Aggregate ---
-class ReturnTask {
-  +returnTaskId
-  +status
-  +List~ReturnItem~
-  --
-  +createReturnTask()
-  +completeReturnTask()
-}
-
-class ReturnItem {
-  <<ValueObject>>
-  +sku
-  +quantity
-  +condition
-}
-
-class ReturnReason {
-  <<ValueObject>>
-  +reasonCode
-  +description
-}
-
-ReturnTask "1" --> "many" ReturnItem
-ReturnTask --> ReturnReason
-
 
 %% ===========================
 %%  Observation Context
@@ -1125,33 +1337,51 @@ subgraph OrderContext [Order Context]
 end
 
 subgraph InventoryContext [Inventory Context]
-  CMD_RegisterMovement[Command: RegisterInventoryMovement]
+  CMD_CreateInboundTransaction[Command: CreateInboundTransaction]
+  CMD_CreateOutboundTransaction[Command: CreateOutboundTransaction]
   CMD_AdjustInventory[Command: AdjustInventoryDiscrepancy]
-  CMD_ProcessReturn[Command: ProcessReturnTask]
 
   EVT_InventoryIncreased[Event: InventoryIncreased]
   EVT_InventoryDecreased[Event: InventoryDecreased]
   EVT_InventoryAdjusted[Event: InventoryAdjusted]
-  EVT_ReturnProcessed[Event: ReturnProcessed]
+  EVT_InventoryTransactionCompleted[Event: InventoryTransactionCompleted]
 
-  CMD_RegisterMovement -->|Inbound| EVT_InventoryIncreased
-  CMD_RegisterMovement -->|Outbound| EVT_InventoryDecreased
+  CMD_CreateInboundTransaction --> EVT_InventoryIncreased
+  CMD_CreateOutboundTransaction --> EVT_InventoryDecreased
   CMD_AdjustInventory --> EVT_InventoryAdjusted
-  CMD_ProcessReturn --> EVT_ReturnProcessed
+  EVT_InventoryIncreased --> EVT_InventoryTransactionCompleted
+  EVT_InventoryDecreased --> EVT_InventoryTransactionCompleted
 end
 
 subgraph WesContext [WES Context]
-  CMD_CreatePickingTask[Command: CreatePickingTask]
-  CMD_ReportPickingProgress[Command: ReportPickingProgress]
-  CMD_CompletePickingTask[Command: CompletePickingTask]
+  CMD_CreatePickingTaskForOrder[Command: CreatePickingTaskForOrder]
+  CMD_CreatePickingTaskFromWes[Command: CreatePickingTaskFromWes]
+  CMD_SubmitPickingTask[Command: SubmitPickingTaskToWes]
+  CMD_UpdatePickingTaskStatus[Command: UpdateTaskStatusFromWes]
+  CMD_AdjustPriority[Command: AdjustTaskPriority]
+
+  CMD_CreatePutawayTaskForReturn[Command: CreatePutawayTaskForReturn]
+  CMD_CreatePutawayTaskFromWes[Command: CreatePutawayTaskFromWes]
+  CMD_SubmitPutawayTask[Command: SubmitPutawayTaskToWes]
 
   EVT_PickingTaskCreated[Event: PickingTaskCreated]
-  EVT_PickingProgressReported[Event: PickingProgressReported]
+  EVT_PickingTaskSubmitted[Event: PickingTaskSubmitted]
   EVT_PickingTaskCompleted[Event: PickingTaskCompleted]
+  EVT_TaskPriorityAdjusted[Event: TaskPriorityAdjusted]
 
-  CMD_CreatePickingTask --> EVT_PickingTaskCreated
-  CMD_ReportPickingProgress --> EVT_PickingProgressReported
-  CMD_CompletePickingTask --> EVT_PickingTaskCompleted
+  EVT_PutawayTaskCreated[Event: PutawayTaskCreated]
+  EVT_PutawayTaskSubmitted[Event: PutawayTaskSubmitted]
+  EVT_PutawayTaskCompleted[Event: PutawayTaskCompleted]
+
+  CMD_CreatePickingTaskForOrder --> EVT_PickingTaskCreated
+  CMD_CreatePickingTaskFromWes --> EVT_PickingTaskCreated
+  CMD_SubmitPickingTask --> EVT_PickingTaskSubmitted
+  CMD_UpdatePickingTaskStatus --> EVT_PickingTaskCompleted
+  CMD_AdjustPriority --> EVT_TaskPriorityAdjusted
+
+  CMD_CreatePutawayTaskForReturn --> EVT_PutawayTaskCreated
+  CMD_CreatePutawayTaskFromWes --> EVT_PutawayTaskCreated
+  CMD_SubmitPutawayTask --> EVT_PutawayTaskSubmitted
 end
 
 subgraph ObservationContext [Observation Context]
@@ -1175,10 +1405,27 @@ subgraph AuditContext [Audit Logging Context]
 end
 
 %% Cross Context Event Flow
-EVT_OrderCreated --> CMD_CreatePickingTask
-EVT_PickingTaskCompleted --> CMD_CompleteOrder
+
+%% Order → WES (建立揀貨任務)
+EVT_OrderCreated --> CMD_CreatePickingTaskForOrder
+
+%% WES Observer 發現與同步
+EVT_WesObserved --> CMD_CreatePickingTaskFromWes
+EVT_WesObserved --> CMD_CreatePutawayTaskFromWes
+EVT_WesObserved --> CMD_UpdatePickingTaskStatus
+
+%% PickingTask → Inventory (出庫)
+EVT_PickingTaskCompleted --> CMD_CreateOutboundTransaction
+
+%% PutawayTask → Inventory (入庫)
+EVT_PutawayTaskCompleted --> CMD_CreateInboundTransaction
+
+%% Inventory → Order (完成訂單)
+EVT_InventoryDecreased --> CMD_CompleteOrder
+
+%% Audit Logging
 EVT_InventoryAdjusted --> CMD_RecordAudit
-EVT_ReturnProcessed --> CMD_RecordAudit
 EVT_OrderCompleted --> CMD_RecordAudit
-EVT_WesObserved --> CMD_ReportPickingProgress
+EVT_PickingTaskCompleted --> CMD_RecordAudit
+EVT_PutawayTaskCompleted --> CMD_RecordAudit
 ```
