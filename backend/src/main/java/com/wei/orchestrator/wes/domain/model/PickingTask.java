@@ -31,7 +31,7 @@ public class PickingTask {
     private LocalDateTime canceledAt;
     private String failureReason;
 
-    private List<Object> domainEvents = new ArrayList<>();
+    private final List<Object> domainEvents = new ArrayList<>();
 
     public PickingTask() {}
 
@@ -45,13 +45,13 @@ public class PickingTask {
         validatePriority(priority);
 
         PickingTask task = new PickingTask();
-        task.taskId = generateTaskId();
-        task.orderId = orderId;
-        task.origin = TaskOrigin.ORCHESTRATOR_SUBMITTED;
-        task.priority = priority;
-        task.status = TaskStatus.PENDING;
-        task.items = new ArrayList<>(items);
-        task.createdAt = LocalDateTime.now();
+        task.setTaskId(generateTaskId());
+        task.setOrderId(orderId);
+        task.setOrigin(TaskOrigin.ORCHESTRATOR_SUBMITTED);
+        task.setPriority(priority);
+        task.setStatus(TaskStatus.PENDING);
+        task.setItems(new ArrayList<>(items));
+        task.setCreatedAt(LocalDateTime.now());
 
         task.addDomainEvent(
                 new PickingTaskCreatedEvent(
