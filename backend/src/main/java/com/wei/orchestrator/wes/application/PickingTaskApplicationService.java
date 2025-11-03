@@ -144,19 +144,6 @@ public class PickingTaskApplicationService {
         publishEvents(pickingTask);
     }
 
-    @Transactional(readOnly = true)
-    public PickingTask getPickingTask(String taskId) {
-        return pickingTaskRepository
-                .findById(taskId)
-                .orElseThrow(
-                        () -> new IllegalArgumentException("Picking task not found: " + taskId));
-    }
-
-    @Transactional(readOnly = true)
-    public List<PickingTask> getPickingTasksByOrderId(String orderId) {
-        return pickingTaskRepository.findByOrderId(orderId);
-    }
-
     private void publishEvents(PickingTask pickingTask) {
         pickingTask.getDomainEvents().forEach(eventPublisher::publishEvent);
         pickingTask.clearDomainEvents();
