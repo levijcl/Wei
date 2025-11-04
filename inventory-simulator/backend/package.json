@@ -1,0 +1,21 @@
+{
+  "name": "inventory-simulator-backend",
+  "version": "1.0.0",
+  "description": "Inventory Simulator Backend - External inventory service simulator for Wei orchestrator",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "init-db": "node src/scripts/initDatabase.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "oracledb": "^6.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
