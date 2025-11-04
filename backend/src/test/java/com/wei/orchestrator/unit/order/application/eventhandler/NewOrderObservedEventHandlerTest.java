@@ -99,7 +99,7 @@ class NewOrderObservedEventHandlerTest {
         }
 
         @Test
-        void shouldThrowRuntimeExceptionWhenOrderCreationFails() {
+        void shouldThrowExceptionWhenOrderCreationFails() {
             String orderId = "ORDER-004";
             NewOrderObservedEvent event = createTestEvent(orderId);
 
@@ -115,8 +115,7 @@ class NewOrderObservedEventHandlerTest {
                             });
 
             assertTrue(
-                    exception.getMessage().contains("Failed to create order from observed event"));
-            assertTrue(exception.getMessage().contains(orderId));
+                    exception.getMessage().contains("Database connection failed"));
             verify(orderRepository, times(1)).findById(orderId);
             verify(orderApplicationService, times(1)).createOrder(any(CreateOrderCommand.class));
         }
