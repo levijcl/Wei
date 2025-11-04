@@ -114,8 +114,7 @@ class NewOrderObservedEventHandlerTest {
                                 eventHandler.handleNewOrderObserved(event);
                             });
 
-            assertTrue(
-                    exception.getMessage().contains("Database connection failed"));
+            assertTrue(exception.getMessage().contains("Database connection failed"));
             verify(orderRepository, times(1)).findById(orderId);
             verify(orderApplicationService, times(1)).createOrder(any(CreateOrderCommand.class));
         }
