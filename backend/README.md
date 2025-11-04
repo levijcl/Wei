@@ -667,8 +667,8 @@ src/
                     │   │   │   ├── CreateOrderCommand.java
                     │   │   │   ├── ReserveInventoryCommand.java
                     │   │   │   └── MarkAsShippedCommand.java
-                    │   │   └── handler/
-                    │   │       └── OrderCommandHandler.java
+                    │   │   └── eventhandler/
+                    │   │       └── NewOrderObservedEventHandler.java
                     │   │
                     │   ├── domain/
                     │   │   ├── model/
