@@ -1,8 +1,6 @@
 package com.wei.orchestrator.inventory.infrastructure.repository;
 
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
-import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionStatus;
-import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionType;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.inventory.infrastructure.mapper.InventoryTransactionMapper;
 import com.wei.orchestrator.inventory.infrastructure.persistence.InventoryTransactionEntity;
@@ -71,83 +69,5 @@ public class InventoryTransactionRepositoryImpl implements InventoryTransactionR
                             return InventoryTransactionMapper.toDomain(entity, lineEntities);
                         })
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<InventoryTransaction> findByStatus(TransactionStatus status) {
-        List<InventoryTransactionEntity> entities =
-                jpaInventoryTransactionRepository.findByStatus(status);
-        return entities.stream()
-                .map(
-                        entity -> {
-                            List<TransactionLineEntity> lineEntities =
-                                    jpaTransactionLineRepository.findByTransactionId(
-                                            entity.getTransactionId());
-                            return InventoryTransactionMapper.toDomain(entity, lineEntities);
-                        })
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<InventoryTransaction> findByType(TransactionType type) {
-        List<InventoryTransactionEntity> entities =
-                jpaInventoryTransactionRepository.findByType(type);
-        return entities.stream()
-                .map(
-                        entity -> {
-                            List<TransactionLineEntity> lineEntities =
-                                    jpaTransactionLineRepository.findByTransactionId(
-                                            entity.getTransactionId());
-                            return InventoryTransactionMapper.toDomain(entity, lineEntities);
-                        })
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<InventoryTransaction> findByWarehouseId(String warehouseId) {
-        List<InventoryTransactionEntity> entities =
-                jpaInventoryTransactionRepository.findByWarehouseId(warehouseId);
-        return entities.stream()
-                .map(
-                        entity -> {
-                            List<TransactionLineEntity> lineEntities =
-                                    jpaTransactionLineRepository.findByTransactionId(
-                                            entity.getTransactionId());
-                            return InventoryTransactionMapper.toDomain(entity, lineEntities);
-                        })
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<InventoryTransaction> findByExternalReservationId(String externalReservationId) {
-        List<InventoryTransactionEntity> entities =
-                jpaInventoryTransactionRepository.findByExternalReservationId(
-                        externalReservationId);
-        return entities.stream()
-                .map(
-                        entity -> {
-                            List<TransactionLineEntity> lineEntities =
-                                    jpaTransactionLineRepository.findByTransactionId(
-                                            entity.getTransactionId());
-                            return InventoryTransactionMapper.toDomain(entity, lineEntities);
-                        })
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional
-    public void deleteById(String transactionId) {
-        jpaTransactionLineRepository.deleteByTransactionId(transactionId);
-        jpaInventoryTransactionRepository.deleteById(transactionId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existsById(String transactionId) {
-        return jpaInventoryTransactionRepository.existsById(transactionId);
     }
 }
