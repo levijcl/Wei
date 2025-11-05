@@ -2,13 +2,10 @@ package com.wei.orchestrator.order.application.eventhandler;
 
 import com.wei.orchestrator.observation.domain.event.NewOrderObservedEvent;
 import com.wei.orchestrator.observation.domain.model.valueobject.ObservationResult;
-import com.wei.orchestrator.observation.domain.model.valueobject.ObservedOrderItem;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
-import com.wei.orchestrator.order.application.command.CreateOrderCommand.OrderLineItemDto;
+import com.wei.orchestrator.order.application.translator.ObservationToOrderTranslator;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
-import java.util.List;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -22,11 +19,15 @@ public class NewOrderObservedEventHandler {
 
     private final OrderApplicationService orderApplicationService;
     private final OrderRepository orderRepository;
+    private final ObservationToOrderTranslator translator;
 
     public NewOrderObservedEventHandler(
-            OrderApplicationService orderApplicationService, OrderRepository orderRepository) {
+            OrderApplicationService orderApplicationService,
+            OrderRepository orderRepository,
+            ObservationToOrderTranslator translator) {
         this.orderApplicationService = orderApplicationService;
         this.orderRepository = orderRepository;
+        this.translator = translator;
     }
 
     @EventListener
@@ -44,7 +45,7 @@ public class NewOrderObservedEventHandler {
             return;
         }
 
-        CreateOrderCommand command = mapToCreateOrderCommand(observedOrder);
+        CreateOrderCommand command = translator.translate(observedOrder);
 
         orderApplicationService.createOrder(command);
 
@@ -52,19 +53,5 @@ public class NewOrderObservedEventHandler {
                 "Successfully created order {} from observed event at {}",
                 orderId,
                 event.getOccurredAt());
-    }
-
-    private CreateOrderCommand mapToCreateOrderCommand(ObservationResult observedOrder) {
-        List<OrderLineItemDto> items =
-                observedOrder.getItems().stream()
-                        .map(this::mapToOrderLineItemDto)
-                        .collect(Collectors.toList());
-
-        return new CreateOrderCommand(observedOrder.getOrderId(), items);
-    }
-
-    private OrderLineItemDto mapToOrderLineItemDto(ObservedOrderItem observedItem) {
-        return new OrderLineItemDto(
-                observedItem.getSku(), observedItem.getQuantity(), observedItem.getPrice());
     }
 }

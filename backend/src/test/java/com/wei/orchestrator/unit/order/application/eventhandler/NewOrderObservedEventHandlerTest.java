@@ -10,6 +10,7 @@ import com.wei.orchestrator.observation.domain.model.valueobject.ObservedOrderIt
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.eventhandler.NewOrderObservedEventHandler;
+import com.wei.orchestrator.order.application.translator.ObservationToOrderTranslator;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
@@ -21,7 +22,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +32,7 @@ class NewOrderObservedEventHandlerTest {
     @Mock private OrderApplicationService orderApplicationService;
 
     @Mock private OrderRepository orderRepository;
+    @Mock private ObservationToOrderTranslator observationToOrderTranslator;
 
     @InjectMocks private NewOrderObservedEventHandler eventHandler;
 
@@ -44,12 +45,15 @@ class NewOrderObservedEventHandlerTest {
             NewOrderObservedEvent event = createTestEvent(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
+            when(observationToOrderTranslator.translate(any(ObservationResult.class)))
+                    .thenReturn(new CreateOrderCommand());
             when(orderApplicationService.createOrder(any(CreateOrderCommand.class)))
                     .thenReturn(createMockOrder(orderId));
 
             eventHandler.handleNewOrderObserved(event);
 
             verify(orderRepository, times(1)).findById(orderId);
+            verify(observationToOrderTranslator).translate(any(ObservationResult.class));
             verify(orderApplicationService, times(1)).createOrder(any(CreateOrderCommand.class));
         }
 
@@ -64,38 +68,8 @@ class NewOrderObservedEventHandlerTest {
             eventHandler.handleNewOrderObserved(event);
 
             verify(orderRepository, times(1)).findById(orderId);
+            verify(observationToOrderTranslator, never()).translate(any(ObservationResult.class));
             verify(orderApplicationService, never()).createOrder(any(CreateOrderCommand.class));
-        }
-
-        @Test
-        void shouldMapObservationResultToCreateOrderCommandCorrectly() {
-            String orderId = "ORDER-003";
-            NewOrderObservedEvent event = createTestEvent(orderId);
-
-            when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
-            when(orderApplicationService.createOrder(any(CreateOrderCommand.class)))
-                    .thenReturn(createMockOrder(orderId));
-
-            ArgumentCaptor<CreateOrderCommand> commandCaptor =
-                    ArgumentCaptor.forClass(CreateOrderCommand.class);
-
-            eventHandler.handleNewOrderObserved(event);
-
-            verify(orderApplicationService).createOrder(commandCaptor.capture());
-
-            CreateOrderCommand capturedCommand = commandCaptor.getValue();
-            assertEquals(orderId, capturedCommand.getOrderId());
-            assertEquals(2, capturedCommand.getItems().size());
-
-            CreateOrderCommand.OrderLineItemDto firstItem = capturedCommand.getItems().get(0);
-            assertEquals("SKU-001", firstItem.getSku());
-            assertEquals(10, firstItem.getQuantity());
-            assertEquals(new BigDecimal("100.00"), firstItem.getPrice());
-
-            CreateOrderCommand.OrderLineItemDto secondItem = capturedCommand.getItems().get(1);
-            assertEquals("SKU-002", secondItem.getSku());
-            assertEquals(5, secondItem.getQuantity());
-            assertEquals(new BigDecimal("50.00"), secondItem.getPrice());
         }
 
         @Test
@@ -104,6 +78,8 @@ class NewOrderObservedEventHandlerTest {
             NewOrderObservedEvent event = createTestEvent(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
+            when(observationToOrderTranslator.translate(event.getObservedOrder()))
+                    .thenReturn(new CreateOrderCommand());
             when(orderApplicationService.createOrder(any(CreateOrderCommand.class)))
                     .thenThrow(new RuntimeException("Database connection failed"));
 
@@ -117,48 +93,6 @@ class NewOrderObservedEventHandlerTest {
             assertTrue(exception.getMessage().contains("Database connection failed"));
             verify(orderRepository, times(1)).findById(orderId);
             verify(orderApplicationService, times(1)).createOrder(any(CreateOrderCommand.class));
-        }
-
-        @Test
-        void shouldHandleEventWithMultipleOrderItems() {
-            String orderId = "ORDER-005";
-            List<ObservedOrderItem> items =
-                    Arrays.asList(
-                            new ObservedOrderItem(
-                                    "SKU-001", "Product 1", 10, new BigDecimal("100.00")),
-                            new ObservedOrderItem(
-                                    "SKU-002", "Product 2", 5, new BigDecimal("50.00")),
-                            new ObservedOrderItem(
-                                    "SKU-003", "Product 3", 15, new BigDecimal("150.00")));
-
-            ObservationResult observationResult =
-                    new ObservationResult(
-                            orderId,
-                            "John Doe",
-                            "john@example.com",
-                            "123 Main St",
-                            "STANDARD",
-                            "WH-001",
-                            "NEW",
-                            items,
-                            LocalDateTime.now());
-
-            NewOrderObservedEvent event =
-                    new NewOrderObservedEvent("observer-1", observationResult);
-
-            when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
-            when(orderApplicationService.createOrder(any(CreateOrderCommand.class)))
-                    .thenReturn(createMockOrder(orderId));
-
-            ArgumentCaptor<CreateOrderCommand> commandCaptor =
-                    ArgumentCaptor.forClass(CreateOrderCommand.class);
-
-            eventHandler.handleNewOrderObserved(event);
-
-            verify(orderApplicationService).createOrder(commandCaptor.capture());
-
-            CreateOrderCommand capturedCommand = commandCaptor.getValue();
-            assertEquals(3, capturedCommand.getItems().size());
         }
 
         @Test
