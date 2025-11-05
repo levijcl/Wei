@@ -1,0 +1,68 @@
+services:
+  oracle-db:
+    image: gvenzl/oracle-free:23-slim
+    container_name: inventory-oracle-db
+    environment:
+      - ORACLE_PASSWORD=oracle
+    ports:
+      - "1524:1521"
+    volumes:
+      - inventory-oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - inventory-network
+
+  # Backend (Node.js + Express)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: inventory-backend
+    environment:
+      - PORT=3778
+      - DB_USER=inventory_user
+      - DB_PASSWORD=inventory123
+      - DB_CONNECT_STRING=oracle-db:1521/FREEPDB1
+      - ORACLE_PASSWORD=oracle
+    ports:
+      - "3778:3778"
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    networks:
+      - inventory-network
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...' &&
+        sleep 10 &&
+        echo 'Initializing database...' &&
+        node src/scripts/initDatabase.js &&
+        echo 'Starting backend server...' &&
+        node src/app.js
+      "
+
+  # Frontend (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: inventory-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:3778
+    ports:
+      - "3779:80"
+    depends_on:
+      - backend
+    networks:
+      - inventory-network
+
+volumes:
+  inventory-oracle-data:
+
+networks:
+  inventory-network:
+    driver: bridge
