@@ -176,8 +176,10 @@ public class InventoryTransaction {
     }
 
     public void markAsReserved(ExternalReservationId externalReservationId) {
-        if (this.status != TransactionStatus.PENDING) {
-            throw new IllegalStateException("Can only mark PENDING transaction as reserved");
+        if (this.status != TransactionStatus.PENDING
+                && this.status != TransactionStatus.PROCESSING) {
+            throw new IllegalStateException(
+                    "Can only mark PENDING or PROCESSING transaction as reserved");
         }
         if (this.source != TransactionSource.ORDER_RESERVATION) {
             throw new IllegalStateException(
@@ -276,9 +278,8 @@ public class InventoryTransaction {
             throw new IllegalStateException(
                     "Cannot release reservation - no external reservation ID");
         }
-        if (this.status.isTerminal()) {
-            throw new IllegalStateException(
-                    "Cannot release reservation in terminal status: " + status);
+        if (this.status == TransactionStatus.FAILED) {
+            throw new IllegalStateException("Cannot release reservation in FAILED status");
         }
 
         this.status = TransactionStatus.COMPLETED;

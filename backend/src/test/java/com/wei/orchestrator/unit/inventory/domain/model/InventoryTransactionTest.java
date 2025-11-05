@@ -120,7 +120,8 @@ class InventoryTransactionTest {
             assertTrue(
                     exception
                             .getMessage()
-                            .contains("Can only mark PENDING transaction as reserved"));
+                            .contains(
+                                    "Can only mark PENDING or PROCESSING transaction as reserved"));
         }
     }
 
@@ -469,18 +470,19 @@ class InventoryTransactionTest {
         }
 
         @Test
-        void shouldThrowExceptionWhenReleasingReservationInTerminalStatus() {
+        void shouldThrowExceptionWhenReleasingReservationInFailedStatus() {
             InventoryTransaction transaction =
                     InventoryTransaction.createReservation("ORDER-001", "SKU-001", "WH-01", 10);
+            transaction.markAsProcessing();
             transaction.markAsReserved(ExternalReservationId.of("EXT-RES-001"));
+            transaction.markAsProcessing();
+            transaction.fail("Test failure");
 
             IllegalStateException exception =
                     assertThrows(
                             IllegalStateException.class, () -> transaction.releaseReservation());
             assertTrue(
-                    exception
-                            .getMessage()
-                            .contains("Cannot release reservation in terminal status"));
+                    exception.getMessage().contains("Cannot release reservation in FAILED status"));
         }
     }
 
