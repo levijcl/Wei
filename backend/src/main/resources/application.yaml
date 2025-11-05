@@ -23,3 +23,6 @@ scheduler:
 wes:
   api:
     base-url: http://localhost:3678
+inventory:
+  api:
+    base-url: http://localhost:3778
