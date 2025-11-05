@@ -581,9 +581,16 @@ Command: AdjustOrderPriority(orderId, newPriority, taskIds=[id1, id2])
 | **Command** | `CreateInboundTransaction(source, sku, qty)`  | 入庫交易（回庫或補貨） |
 | **Command** | `CreateOutboundTransaction(source, sku, qty)` | 出庫交易（出貨或報廢） |
 | **Command** | `ApplyAdjustment(adjustmentId, sku, diffQty)` | 根據調整任務修正庫存  |
+| **Command** | `ReserveInventory(orderId, sku, warehouseId, qty)` | 向外部庫存系統預約庫存 |
+| **Command** | `ConsumeReservation(reservationId)` | 消耗預約（揀貨完成時） |
+| **Command** | `ReleaseReservation(reservationId)` | 釋放預約（訂單取消時） |
 | **Event**   | `InventoryIncreased`                          | 庫存增加        |
 | **Event**   | `InventoryDecreased`                          | 庫存減少        |
 | **Event**   | `InventoryTransactionCompleted`               | 庫存異動完成      |
+| **Event**   | `InventoryReserved`                           | 庫存預約成功      |
+| **Event**   | `ReservationConsumed`                         | 預約已消耗       |
+| **Event**   | `ReservationReleased`                         | 預約已釋放       |
+| **Event**   | `ReservationFailed`                           | 預約失敗（庫存不足）  |
 
 ---
 

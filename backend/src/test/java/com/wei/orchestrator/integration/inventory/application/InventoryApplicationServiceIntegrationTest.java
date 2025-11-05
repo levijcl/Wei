@@ -1,0 +1,394 @@
+package com.wei.orchestrator.integration.inventory.application;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import com.wei.orchestrator.inventory.application.InventoryApplicationService;
+import com.wei.orchestrator.inventory.application.command.*;
+import com.wei.orchestrator.inventory.domain.exception.InsufficientInventoryException;
+import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
+import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
+import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionStatus;
+import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionType;
+import com.wei.orchestrator.inventory.domain.port.InventoryPort;
+import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Transactional;
+
+@ActiveProfiles("test")
+@SpringBootTest
+@Transactional
+class InventoryApplicationServiceIntegrationTest {
+
+    @Autowired private InventoryApplicationService inventoryApplicationService;
+
+    @Autowired private InventoryTransactionRepository inventoryTransactionRepository;
+
+    @MockitoBean private InventoryPort inventoryPort;
+
+    @MockitoBean private ApplicationEventPublisher eventPublisher;
+
+    @Nested
+    class ReserveInventoryTests {
+
+        @Test
+        void shouldReserveInventoryAndPersistTransaction() {
+            ReserveInventoryCommand command =
+                    new ReserveInventoryCommand("ORDER-001", "SKU-001", "WH-01", 10);
+
+            ExternalReservationId externalId = ExternalReservationId.of("EXT-RES-001");
+            when(inventoryPort.createReservation("SKU-001", "WH-01", "ORDER-001", 10))
+                    .thenReturn(externalId);
+
+            String transactionId = inventoryApplicationService.reserveInventory(command);
+
+            assertNotNull(transactionId);
+
+            Optional<InventoryTransaction> savedTransaction =
+                    inventoryTransactionRepository.findById(transactionId);
+            assertTrue(savedTransaction.isPresent());
+
+            InventoryTransaction transaction = savedTransaction.get();
+            assertEquals(TransactionType.OUTBOUND, transaction.getType());
+            assertEquals(TransactionStatus.COMPLETED, transaction.getStatus());
+            assertEquals("ORDER-001", transaction.getSourceReferenceId());
+            assertEquals("EXT-RES-001", transaction.getExternalReservationId().getValue());
+            assertEquals("WH-01", transaction.getWarehouseLocation().getWarehouseId());
+            assertEquals(1, transaction.getTransactionLines().size());
+            assertEquals("SKU-001", transaction.getTransactionLines().get(0).getSku());
+            assertEquals(10, transaction.getTransactionLines().get(0).getQuantity());
+
+            verify(inventoryPort).createReservation("SKU-001", "WH-01", "ORDER-001", 10);
+        }
+
+        @Test
+        void shouldFailReservationWhenInsufficientInventory() {
+            ReserveInventoryCommand command =
+                    new ReserveInventoryCommand("ORDER-002", "SKU-002", "WH-01", 50);
+
+            when(inventoryPort.createReservation("SKU-002", "WH-01", "ORDER-002", 50))
+                    .thenThrow(
+                            new InsufficientInventoryException(
+                                    "Insufficient inventory for SKU: SKU-002"));
+
+            assertThrows(
+                    InsufficientInventoryException.class,
+                    () -> inventoryApplicationService.reserveInventory(command));
+
+            List<InventoryTransaction> transactions =
+                    inventoryTransactionRepository.findBySourceReferenceId("ORDER-002");
+            assertFalse(transactions.isEmpty());
+
+            InventoryTransaction transaction = transactions.get(0);
+            assertEquals(TransactionStatus.FAILED, transaction.getStatus());
+            assertEquals("ORDER-002", transaction.getSourceReferenceId());
+
+            verify(inventoryPort).createReservation("SKU-002", "WH-01", "ORDER-002", 50);
+        }
+
+        @Test
+        void shouldQueryReservationBySourceReferenceId() {
+            ReserveInventoryCommand command =
+                    new ReserveInventoryCommand("ORDER-003", "SKU-003", "WH-01", 15);
+
+            ExternalReservationId externalId = ExternalReservationId.of("EXT-RES-003");
+            when(inventoryPort.createReservation("SKU-003", "WH-01", "ORDER-003", 15))
+                    .thenReturn(externalId);
+
+            inventoryApplicationService.reserveInventory(command);
+
+            List<InventoryTransaction> transactions =
+                    inventoryTransactionRepository.findBySourceReferenceId("ORDER-003");
+
+            assertFalse(transactions.isEmpty());
+            assertEquals(1, transactions.size());
+            assertEquals("ORDER-003", transactions.get(0).getSourceReferenceId());
+            assertEquals("EXT-RES-003", transactions.get(0).getExternalReservationId().getValue());
+        }
+    }
+
+    @Nested
+    class ConsumeReservationTests {
+
+        @Test
+        void shouldConsumeReservationAndUpdateTransaction() {
+            ReserveInventoryCommand reserveCommand =
+                    new ReserveInventoryCommand("ORDER-004", "SKU-004", "WH-01", 20);
+
+            ExternalReservationId externalId = ExternalReservationId.of("EXT-RES-004");
+            when(inventoryPort.createReservation("SKU-004", "WH-01", "ORDER-004", 20))
+                    .thenReturn(externalId);
+
+            String transactionId = inventoryApplicationService.reserveInventory(reserveCommand);
+
+            doNothing().when(inventoryPort).consumeReservation(externalId);
+
+            ConsumeReservationCommand consumeCommand =
+                    new ConsumeReservationCommand(transactionId, "EXT-RES-004", "ORDER-004");
+
+            inventoryApplicationService.consumeReservation(consumeCommand);
+
+            Optional<InventoryTransaction> updatedTransaction =
+                    inventoryTransactionRepository.findById(transactionId);
+            assertTrue(updatedTransaction.isPresent());
+            assertEquals(TransactionStatus.COMPLETED, updatedTransaction.get().getStatus());
+
+            verify(inventoryPort).consumeReservation(externalId);
+        }
+
+        @Test
+        void shouldThrowExceptionWhenTransactionNotFound() {
+            ConsumeReservationCommand command =
+                    new ConsumeReservationCommand("NON-EXISTENT", "EXT-RES-999", "ORDER-999");
+
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> inventoryApplicationService.consumeReservation(command));
+
+            verify(inventoryPort, never()).consumeReservation(any());
+        }
+    }
+
+    @Nested
+    class ReleaseReservationTests {
+
+        @Test
+        void shouldReleaseReservationAndUpdateTransaction() {
+            ReserveInventoryCommand reserveCommand =
+                    new ReserveInventoryCommand("ORDER-005", "SKU-005", "WH-01", 25);
+
+            ExternalReservationId externalId = ExternalReservationId.of("EXT-RES-005");
+            when(inventoryPort.createReservation("SKU-005", "WH-01", "ORDER-005", 25))
+                    .thenReturn(externalId);
+
+            String transactionId = inventoryApplicationService.reserveInventory(reserveCommand);
+
+            doNothing().when(inventoryPort).releaseReservation(externalId);
+
+            ReleaseReservationCommand releaseCommand =
+                    new ReleaseReservationCommand(transactionId, "EXT-RES-005", "Order cancelled");
+
+            inventoryApplicationService.releaseReservation(releaseCommand);
+
+            Optional<InventoryTransaction> updatedTransaction =
+                    inventoryTransactionRepository.findById(transactionId);
+            assertTrue(updatedTransaction.isPresent());
+            assertEquals(TransactionStatus.COMPLETED, updatedTransaction.get().getStatus());
+
+            verify(inventoryPort).releaseReservation(externalId);
+        }
+    }
+
+    @Nested
+    class IncreaseInventoryTests {
+
+        @Test
+        void shouldIncreaseInventoryAndPersistTransaction() {
+            IncreaseInventoryCommand command =
+                    new IncreaseInventoryCommand(
+                            "SKU-006", "WH-01", 30, "Putaway completed", "PUTAWAY-001");
+
+            doNothing()
+                    .when(inventoryPort)
+                    .increaseInventory("SKU-006", "WH-01", 30, "Putaway completed");
+
+            String transactionId = inventoryApplicationService.increaseInventory(command);
+
+            assertNotNull(transactionId);
+
+            Optional<InventoryTransaction> savedTransaction =
+                    inventoryTransactionRepository.findById(transactionId);
+            assertTrue(savedTransaction.isPresent());
+
+            InventoryTransaction transaction = savedTransaction.get();
+            assertEquals(TransactionType.INBOUND, transaction.getType());
+            assertEquals(TransactionStatus.COMPLETED, transaction.getStatus());
+            assertEquals("PUTAWAY-001", transaction.getSourceReferenceId());
+            assertEquals("WH-01", transaction.getWarehouseLocation().getWarehouseId());
+            assertEquals(1, transaction.getTransactionLines().size());
+            assertEquals("SKU-006", transaction.getTransactionLines().get(0).getSku());
+            assertEquals(30, transaction.getTransactionLines().get(0).getQuantity());
+
+            verify(inventoryPort).increaseInventory("SKU-006", "WH-01", 30, "Putaway completed");
+        }
+
+        @Test
+        void shouldHandleExceptionDuringIncrease() {
+            IncreaseInventoryCommand command =
+                    new IncreaseInventoryCommand(
+                            "SKU-007", "WH-01", 35, "Putaway completed", "PUTAWAY-002");
+
+            doThrow(new RuntimeException("External system error"))
+                    .when(inventoryPort)
+                    .increaseInventory("SKU-007", "WH-01", 35, "Putaway completed");
+
+            assertThrows(
+                    RuntimeException.class,
+                    () -> inventoryApplicationService.increaseInventory(command));
+
+            List<InventoryTransaction> transactions =
+                    inventoryTransactionRepository.findBySourceReferenceId("PUTAWAY-002");
+            assertFalse(transactions.isEmpty());
+
+            InventoryTransaction transaction = transactions.get(0);
+            assertEquals(TransactionStatus.FAILED, transaction.getStatus());
+            assertEquals("PUTAWAY-002", transaction.getSourceReferenceId());
+
+            verify(inventoryPort).increaseInventory("SKU-007", "WH-01", 35, "Putaway completed");
+        }
+    }
+
+    @Nested
+    class AdjustInventoryTests {
+
+        @Test
+        void shouldAdjustInventoryWithNegativeQuantity() {
+            AdjustInventoryCommand command =
+                    new AdjustInventoryCommand("SKU-008", "WH-01", -5, "Damaged goods", "ADJ-001");
+
+            doNothing()
+                    .when(inventoryPort)
+                    .adjustInventory("SKU-008", "WH-01", -5, "Damaged goods");
+
+            String transactionId = inventoryApplicationService.adjustInventory(command);
+
+            assertNotNull(transactionId);
+
+            Optional<InventoryTransaction> savedTransaction =
+                    inventoryTransactionRepository.findById(transactionId);
+            assertTrue(savedTransaction.isPresent());
+
+            InventoryTransaction transaction = savedTransaction.get();
+            assertEquals(TransactionType.ADJUSTMENT, transaction.getType());
+            assertEquals(TransactionStatus.COMPLETED, transaction.getStatus());
+            assertEquals("ADJ-001", transaction.getSourceReferenceId());
+            assertEquals(-5, transaction.getTransactionLines().get(0).getQuantity());
+
+            verify(inventoryPort).adjustInventory("SKU-008", "WH-01", -5, "Damaged goods");
+        }
+
+        @Test
+        void shouldAdjustInventoryWithPositiveQuantity() {
+            AdjustInventoryCommand command =
+                    new AdjustInventoryCommand(
+                            "SKU-009", "WH-01", 10, "Found during cycle count", "ADJ-002");
+
+            doNothing()
+                    .when(inventoryPort)
+                    .adjustInventory("SKU-009", "WH-01", 10, "Found during cycle count");
+
+            String transactionId = inventoryApplicationService.adjustInventory(command);
+
+            assertNotNull(transactionId);
+
+            Optional<InventoryTransaction> savedTransaction =
+                    inventoryTransactionRepository.findById(transactionId);
+            assertTrue(savedTransaction.isPresent());
+
+            InventoryTransaction transaction = savedTransaction.get();
+            assertEquals(TransactionType.ADJUSTMENT, transaction.getType());
+            assertEquals(TransactionStatus.COMPLETED, transaction.getStatus());
+            assertEquals(10, transaction.getTransactionLines().get(0).getQuantity());
+
+            verify(inventoryPort)
+                    .adjustInventory("SKU-009", "WH-01", 10, "Found during cycle count");
+        }
+    }
+
+    @Nested
+    class QueryTests {
+
+        @Test
+        void shouldQueryTransactionsByStatus() {
+            ReserveInventoryCommand command1 =
+                    new ReserveInventoryCommand("ORDER-101", "SKU-101", "WH-01", 10);
+            ReserveInventoryCommand command2 =
+                    new ReserveInventoryCommand("ORDER-102", "SKU-102", "WH-01", 20);
+
+            ExternalReservationId externalId1 = ExternalReservationId.of("EXT-RES-101");
+            ExternalReservationId externalId2 = ExternalReservationId.of("EXT-RES-102");
+
+            when(inventoryPort.createReservation("SKU-101", "WH-01", "ORDER-101", 10))
+                    .thenReturn(externalId1);
+            when(inventoryPort.createReservation("SKU-102", "WH-01", "ORDER-102", 20))
+                    .thenReturn(externalId2);
+
+            inventoryApplicationService.reserveInventory(command1);
+            inventoryApplicationService.reserveInventory(command2);
+
+            List<InventoryTransaction> completedTransactions =
+                    inventoryTransactionRepository.findByStatus(TransactionStatus.COMPLETED);
+
+            assertTrue(completedTransactions.size() >= 2);
+        }
+
+        @Test
+        void shouldQueryTransactionsByType() {
+            IncreaseInventoryCommand command =
+                    new IncreaseInventoryCommand(
+                            "SKU-201", "WH-01", 40, "Putaway completed", "PUTAWAY-201");
+
+            doNothing()
+                    .when(inventoryPort)
+                    .increaseInventory("SKU-201", "WH-01", 40, "Putaway completed");
+
+            inventoryApplicationService.increaseInventory(command);
+
+            List<InventoryTransaction> inboundTransactions =
+                    inventoryTransactionRepository.findByType(TransactionType.INBOUND);
+
+            assertFalse(inboundTransactions.isEmpty());
+            assertTrue(
+                    inboundTransactions.stream()
+                            .anyMatch(t -> t.getSourceReferenceId().equals("PUTAWAY-201")));
+        }
+
+        @Test
+        void shouldQueryTransactionsByWarehouseId() {
+            ReserveInventoryCommand command =
+                    new ReserveInventoryCommand("ORDER-301", "SKU-301", "WH-02", 15);
+
+            ExternalReservationId externalId = ExternalReservationId.of("EXT-RES-301");
+            when(inventoryPort.createReservation("SKU-301", "WH-02", "ORDER-301", 15))
+                    .thenReturn(externalId);
+
+            inventoryApplicationService.reserveInventory(command);
+
+            List<InventoryTransaction> warehouseTransactions =
+                    inventoryTransactionRepository.findByWarehouseId("WH-02");
+
+            assertFalse(warehouseTransactions.isEmpty());
+            assertTrue(
+                    warehouseTransactions.stream()
+                            .anyMatch(t -> t.getSourceReferenceId().equals("ORDER-301")));
+        }
+
+        @Test
+        void shouldQueryTransactionsByExternalReservationId() {
+            ReserveInventoryCommand command =
+                    new ReserveInventoryCommand("ORDER-401", "SKU-401", "WH-01", 25);
+
+            ExternalReservationId externalId = ExternalReservationId.of("EXT-RES-401");
+            when(inventoryPort.createReservation("SKU-401", "WH-01", "ORDER-401", 25))
+                    .thenReturn(externalId);
+
+            inventoryApplicationService.reserveInventory(command);
+
+            List<InventoryTransaction> transactions =
+                    inventoryTransactionRepository.findByExternalReservationId("EXT-RES-401");
+
+            assertFalse(transactions.isEmpty());
+            assertEquals(1, transactions.size());
+            assertEquals("ORDER-401", transactions.get(0).getSourceReferenceId());
+        }
+    }
+}
