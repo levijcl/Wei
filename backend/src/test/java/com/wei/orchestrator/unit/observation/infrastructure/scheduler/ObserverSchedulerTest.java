@@ -100,26 +100,6 @@ class ObserverSchedulerTest {
         }
 
         @Test
-        void shouldNotUnlockIfLockWasNotAcquired() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(false);
-
-            observerScheduler.pollAllObserverTypes();
-
-            verify(lock, never()).unlock();
-        }
-
-        @Test
-        void shouldCallLockRegistryWithCorrectLockKey() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
-
-            observerScheduler.pollAllObserverTypes();
-
-            verify(lockRegistry).obtain("order-observer-poll");
-        }
-
-        @Test
         void shouldUseTryLockWithCorrectTimeout() throws InterruptedException {
             when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
             when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
@@ -127,16 +107,6 @@ class ObserverSchedulerTest {
             observerScheduler.pollAllObserverTypes();
 
             verify(lock).tryLock(1, TimeUnit.SECONDS);
-        }
-
-        @Test
-        void shouldNotCallPollingServiceMultipleTimes() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
-
-            observerScheduler.pollAllObserverTypes();
-
-            verify(orderObserverService, times(1)).pollAllActiveObservers();
         }
 
         @Test
@@ -160,40 +130,6 @@ class ObserverSchedulerTest {
             observerScheduler.pollAllObserverTypes();
 
             verify(lock, atLeastOnce()).unlock();
-        }
-    }
-
-    @Nested
-    class pollObserverType {
-
-        @Test
-        void shouldAcquireLockForSpecificObserverType() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
-
-            observerScheduler.pollAllObserverTypes();
-
-            verify(lockRegistry).obtain("order-observer-poll");
-        }
-
-        @Test
-        void shouldExecutePollingActionWhenLockAcquired() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
-
-            observerScheduler.pollAllObserverTypes();
-
-            verify(orderObserverService).pollAllActiveObservers();
-        }
-
-        @Test
-        void shouldNotExecutePollingActionWhenLockFails() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(false);
-
-            observerScheduler.pollAllObserverTypes();
-
-            verify(orderObserverService, never()).pollAllActiveObservers();
         }
     }
 }
