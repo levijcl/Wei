@@ -43,20 +43,41 @@ async function initDatabase() {
     });
 
     console.log('Creating orders table...');
-    await connection.execute(`
-      CREATE TABLE orders (
-        order_id VARCHAR2(36) PRIMARY KEY,
-        customer_name VARCHAR2(255) NOT NULL,
-        customer_email VARCHAR2(255),
-        shipping_address VARCHAR2(500),
-        order_type VARCHAR2(50) DEFAULT 'TYPE_A',
-        warehouse_id VARCHAR2(50) DEFAULT 'WH001',
-        status VARCHAR2(50) DEFAULT 'NEW',
-        created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-        updated_at TIMESTAMP DEFAULT SYSTIMESTAMP
-      )
-    `);
-    console.log('Orders table created');
+    try {
+      await connection.execute(`
+        CREATE TABLE orders (
+          order_id VARCHAR2(36) PRIMARY KEY,
+          customer_name VARCHAR2(255) NOT NULL,
+          customer_email VARCHAR2(255),
+          shipping_address VARCHAR2(500),
+          order_type VARCHAR2(50) DEFAULT 'TYPE_A',
+          warehouse_id VARCHAR2(50) DEFAULT 'WH001',
+          status VARCHAR2(50) DEFAULT 'NEW',
+          scheduled_pickup_time TIMESTAMP DEFAULT SYSTIMESTAMP + INTERVAL '2' HOUR,
+          created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+          updated_at TIMESTAMP DEFAULT SYSTIMESTAMP
+        )
+      `);
+      console.log('Orders table created');
+    } catch (err) {
+      if (err.errorNum === 955) {
+        console.log('Orders table already exists, checking for scheduled_pickup_time column...');
+        try {
+          await connection.execute(`
+            ALTER TABLE orders ADD scheduled_pickup_time TIMESTAMP DEFAULT SYSTIMESTAMP + INTERVAL '2' HOUR
+          `);
+          console.log('Added scheduled_pickup_time column to existing orders table');
+        } catch (alterErr) {
+          if (alterErr.errorNum === 1430) {
+            console.log('scheduled_pickup_time column already exists');
+          } else {
+            throw alterErr;
+          }
+        }
+      } else {
+        throw err;
+      }
+    }
 
     console.log('Creating order_items table...');
     await connection.execute(`

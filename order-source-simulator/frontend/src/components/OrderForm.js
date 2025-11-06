@@ -3,12 +3,20 @@ import { orderAPI } from '../services/api';
 import '../styles/OrderForm.css';
 
 const OrderForm = ({ onOrderCreated }) => {
+  // Helper function to get default scheduled pickup time (current time + 2 hours)
+  const getDefaultScheduledPickupTime = () => {
+    const now = new Date();
+    now.setHours(now.getHours() + 2);
+    return now.toISOString().slice(0, 16); // Format for datetime-local input
+  };
+
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_email: '',
     shipping_address: '',
     order_type: 'TYPE_A',
     warehouse_id: 'WH001',
+    scheduled_pickup_time: getDefaultScheduledPickupTime(),
   });
 
   const [items, setItems] = useState([
@@ -63,6 +71,7 @@ const OrderForm = ({ onOrderCreated }) => {
         shipping_address: '',
         order_type: 'TYPE_A',
         warehouse_id: 'WH001',
+        scheduled_pickup_time: getDefaultScheduledPickupTime(),
       });
       setItems([{ sku: '', product_name: '', quantity: 1, price: 0 }]);
 
@@ -153,6 +162,17 @@ const OrderForm = ({ onOrderCreated }) => {
                 <option value="WH003">WH003</option>
               </select>
             </div>
+          </div>
+
+          <div className="form-group">
+            <label>Scheduled Pickup Time</label>
+            <input
+              type="datetime-local"
+              name="scheduled_pickup_time"
+              value={formData.scheduled_pickup_time}
+              onChange={handleInputChange}
+            />
+            <small className="form-hint">Default: Current time + 2 hours</small>
           </div>
         </div>
 

@@ -8,6 +8,12 @@ class Order {
       connection = await db.getPool().getConnection();
 
       const orderId = uuidv4();
+
+      // Default scheduled_pickup_time to current time + 2 hours if not provided
+      const scheduledPickupTime = orderData.scheduled_pickup_time
+        ? new Date(orderData.scheduled_pickup_time)
+        : new Date(Date.now() + 2 * 60 * 60 * 1000);
+
       const sql = `
         INSERT INTO orders (
           order_id,
@@ -17,6 +23,7 @@ class Order {
           order_type,
           warehouse_id,
           status,
+          scheduled_pickup_time,
           created_at,
           updated_at
         ) VALUES (
@@ -27,6 +34,7 @@ class Order {
           :orderType,
           :warehouseId,
           :status,
+          :scheduledPickupTime,
           SYSTIMESTAMP,
           SYSTIMESTAMP
         )
@@ -39,7 +47,8 @@ class Order {
         shippingAddress: orderData.shipping_address,
         orderType: orderData.order_type || 'TYPE_A',
         warehouseId: orderData.warehouse_id || 'WH001',
-        status: 'NEW'
+        status: 'NEW',
+        scheduledPickupTime
       };
 
       await connection.execute(sql, binds, { autoCommit: false });
@@ -110,6 +119,7 @@ class Order {
         order_type,
         warehouse_id,
         status,
+        scheduled_pickup_time,
         created_at,
         updated_at
       FROM orders
@@ -152,6 +162,7 @@ class Order {
         order_type,
         warehouse_id,
         status,
+        scheduled_pickup_time,
         created_at,
         updated_at
       FROM orders
@@ -215,6 +226,7 @@ class Order {
         order_type,
         warehouse_id,
         status,
+        scheduled_pickup_time,
         created_at,
         updated_at
       FROM orders
