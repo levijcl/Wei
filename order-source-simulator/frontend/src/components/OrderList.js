@@ -124,14 +124,16 @@ const OrderList = ({ refreshTrigger }) => {
               <th>Type</th>
               <th>Warehouse</th>
               <th>Status</th>
+              <th>Scheduled Pickup</th>
               <th>Created At</th>
+              <th>Updated At</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan="7" className="no-data">No orders found</td>
+                <td colSpan="9" className="no-data">No orders found</td>
               </tr>
             ) : (
               orders.map((order) => (
@@ -148,7 +150,9 @@ const OrderList = ({ refreshTrigger }) => {
                       {order.STATUS}
                     </span>
                   </td>
+                  <td>{formatDate(order.SCHEDULED_PICKUP_TIME)}</td>
                   <td>{formatDate(order.CREATED_AT)}</td>
+                  <td>{formatDate(order.UPDATED_AT)}</td>
                   <td className="actions">
                     <button
                       onClick={() => viewOrderDetails(order.ORDER_ID)}
@@ -194,7 +198,9 @@ const OrderList = ({ refreshTrigger }) => {
                 </p>
                 <p><strong>Order Type:</strong> {selectedOrder.ORDER_TYPE}</p>
                 <p><strong>Warehouse:</strong> {selectedOrder.WAREHOUSE_ID}</p>
-                <p><strong>Created:</strong> {formatDate(selectedOrder.CREATED_AT)}</p>
+                <p><strong>Scheduled Pickup:</strong> {formatDate(selectedOrder.SCHEDULED_PICKUP_TIME)}</p>
+                <p><strong>Created At:</strong> {formatDate(selectedOrder.CREATED_AT)}</p>
+                <p><strong>Updated At:</strong> {formatDate(selectedOrder.UPDATED_AT)}</p>
               </div>
 
               <div className="detail-section">
