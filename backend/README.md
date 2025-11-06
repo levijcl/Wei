@@ -410,12 +410,135 @@ OO -->|監控訂單來源| OR
 | **Command** | `CommitInventory()`      | 庫存扣減完成，確認出貨                    |
 | **Command** | `CreatePickingTask()`    | 產生對應的 WES picking 任務           |
 | **Event**   | `OrderCreated`           | 訂單建立完成                         |
+| **Event**   | `OrderScheduled`         | 訂單已排程，等待履約時間窗口              |
+| **Event**   | `OrderReadyForFulfillment` | 已進入履約時間窗口，準備預約庫存          |
 | **Event**   | `OrderReserved`          | 完成庫存預約                         |
 | **Event**   | `OrderCommitted`         | 完成庫存扣減                         |
 | **Event**   | `OrderReadyForPickup`    | 任務完成、等待出貨                      |
 | **Event**   | `OrderShipped`           | 已出貨                            |
+| **Event**   | `OrderFulfillmentFailed` | 履約失敗（如庫存預約失敗）              |
+| **Event**   | `OrderMovedToManualReview` | 已移至人工審核佇列                   |
 | **Event**   | `OrderFailed`            | 處理異常                           |
 
+#### 排程履約設計（Scheduled Order Fulfillment）
+
+**業務場景：**
+當訂單建立時，並非所有訂單都需要立即履約。部分訂單包含「預定取貨時間」(Scheduled Pickup Time)，系統應在取貨時間前的適當時機才開始履約流程（預約庫存 → 建立揀貨任務）。
+
+**設計目標：**
+- 支援延遲履約，避免過早鎖定庫存
+- 依據取貨時間動態觸發履約流程
+- 處理庫存預約失敗情境，提供人工審核機制
+
+**核心概念：**
+
+1. **Scheduled Pickup Time（預定取貨時間）**
+   - 表示外送員預定取貨的時間
+   - 來源：外部訂單系統（透過 OrderObserver 輪詢取得）
+   - Value Object：`ScheduledPickupTime`
+
+2. **Fulfillment Lead Time（履約提前時間）**
+   - 表示需在取貨時間前多久開始履約
+   - 預設值：2 小時
+   - 範例：取貨時間 14:00 → 履約開始時間 12:00
+   - Value Object：`FulfillmentLeadTime`
+
+**訂單狀態擴充：**
+
+| 狀態 | 說明 | 觸發條件 |
+|------|------|----------|
+| `SCHEDULED` | 訂單已建立，等待履約時間窗口 | 訂單含有未來的 scheduledPickupTime |
+| `AWAITING_FULFILLMENT` | 已進入履約窗口，準備預約庫存 | 當前時間 >= (取貨時間 - 履約提前時間) |
+| `FAILED_TO_RESERVE` | 庫存預約失敗，進入人工審核 | 庫存預約失敗且無法自動重試 |
+
+**狀態流程：**
+
+```
+立即履約訂單（無 scheduledPickupTime）：
+CREATED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SHIPPED
+
+排程訂單（有 scheduledPickupTime）：
+CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SHIPPED
+                                         ↓
+                              FAILED_TO_RESERVE（人工審核）
+```
+
+**基礎設施元件：**
+
+**FulfillmentScheduler（履約排程器）**
+- 技術實作：Spring @Scheduled（每 1 分鐘執行）
+- 使用分散式鎖（LockRegistry）防止並行執行
+- 查詢所有 `SCHEDULED` 狀態訂單
+- 判斷是否進入履約窗口：`當前時間 >= (scheduledPickupTime - fulfillmentLeadTime)`
+- 若符合條件，呼叫 `OrderApplicationService.initiateFulfillment(orderId)`
+
+**Domain Service（領域服務）：**
+
+**OrderFulfillmentDomainService**
+- 責任：處理人工審核佇列的業務邏輯
+- 協調多個 Aggregate：`Order` + `OrderManualReview`
+- 核心方法：
+  - `moveOrderToManualReview(Order, ReservationFailureReason)`: 將訂單移至人工審核
+  - `determineReviewPriority(Order, ReservationFailureReason)`: 依據業務規則決定審核優先權
+    - 取貨時間緊迫（< 24 小時）→ URGENT
+    - 失敗原因嚴重（系統性錯誤）→ HIGH
+    - 其他 → NORMAL
+  - `shouldRetryReservation(Order, ReservationFailureReason)`: 判斷是否應重試（暫時性錯誤 + 時間充裕）
+
+**人工審核 Aggregate：**
+
+**OrderManualReview（訂單人工審核）**
+- `reviewId`: 審核單 ID
+- `orderId`: 關聯訂單 ID
+- `failureReason`: 失敗原因（ReservationFailureReason）
+- `priority`: 審核優先權（ReviewPriority: URGENT, HIGH, NORMAL, LOW）
+- `status`: 審核狀態（ReviewStatus: PENDING, IN_PROGRESS, RESOLVED）
+- `createdAt`: 建立時間
+- `resolvedAt`: 解決時間
+- `notes`: 處理備註
+
+**排程履約流程範例：**
+
+```
+1. OrderObserver 輪詢外部訂單系統，發現新訂單
+   - orderId: "ORD-20241106-001"
+   - scheduledPickupTime: 2024-11-06 14:00:00
+   - items: [{ sku: "SKU-A", qty: 10 }]
+
+2. NewOrderObservedEvent 觸發 Order 建立
+   - status: CREATED
+
+3. Order.scheduleForLaterFulfillment() 執行
+   - 判斷 scheduledPickupTime 為未來時間
+   - status: CREATED → SCHEDULED
+   - 發佈 OrderScheduledEvent
+
+4. FulfillmentScheduler 每分鐘檢查
+   - 當前時間：2024-11-06 12:00:00
+   - 履約窗口時間：14:00:00 - 2 小時 = 12:00:00
+   - 條件滿足！
+
+5. Order.markReadyForFulfillment() 執行
+   - status: SCHEDULED → AWAITING_FULFILLMENT
+   - 發佈 OrderReadyForFulfillmentEvent
+
+6. OrderReadyForFulfillmentEventHandler 觸發
+   - 呼叫 InventoryApplicationService.reserveInventory()
+
+7a. 庫存預約成功路徑：
+   - InventoryReservedEvent → Order.reserveInventory()
+   - status: AWAITING_FULFILLMENT → RESERVED
+   - 繼續正常流程（建立 PickingTask...）
+
+7b. 庫存預約失敗路徑：
+   - 發佈 OrderFulfillmentFailedEvent
+   - OrderFulfillmentFailedEventHandler 觸發
+   - 呼叫 OrderFulfillmentDomainService.moveOrderToManualReview()
+   - 建立 OrderManualReview（priority 依取貨時間決定）
+   - status: AWAITING_FULFILLMENT → FAILED_TO_RESERVE
+   - 發佈 OrderMovedToManualReviewEvent
+   - 通知營運團隊處理
+```
 ---
 
 ### 🏭 **WES Context**
@@ -672,35 +795,56 @@ src/
                     │   │   ├── OrderApplicationService.java
                     │   │   ├── command/
                     │   │   │   ├── CreateOrderCommand.java
+                    │   │   │   ├── InitiateFulfillmentCommand.java
+                    │   │   │   ├── MoveToManualReviewCommand.java
                     │   │   │   ├── ReserveInventoryCommand.java
                     │   │   │   └── MarkAsShippedCommand.java
                     │   │   └── eventhandler/
-                    │   │       └── NewOrderObservedEventHandler.java
+                    │   │       ├── NewOrderObservedEventHandler.java
+                    │   │       ├── OrderReadyForFulfillmentEventHandler.java
+                    │   │       └── OrderFulfillmentFailedEventHandler.java
                     │   │
                     │   ├── domain/
                     │   │   ├── model/
                     │   │   │   ├── Order.java
                     │   │   │   ├── OrderLineItem.java
+                    │   │   │   ├── OrderManualReview.java
                     │   │   │   ├── ReservationInfo.java
                     │   │   │   ├── ShipmentInfo.java
                     │   │   │   └── valueobject/
-                    │   │   │       └── OrderStatus.java
+                    │   │   │       ├── OrderStatus.java
+                    │   │   │       ├── ScheduledPickupTime.java
+                    │   │   │       ├── FulfillmentLeadTime.java
+                    │   │   │       ├── ReservationFailureReason.java
+                    │   │   │       ├── ReviewPriority.java
+                    │   │   │       └── ReviewStatus.java
                     │   │   ├── event/
                     │   │   │   ├── OrderCreatedEvent.java
+                    │   │   │   ├── OrderScheduledEvent.java
+                    │   │   │   ├── OrderReadyForFulfillmentEvent.java
                     │   │   │   ├── OrderReservedEvent.java
-                    │   │   │   └── OrderShippedEvent.java
+                    │   │   │   ├── OrderCommittedEvent.java
+                    │   │   │   ├── OrderShippedEvent.java
+                    │   │   │   ├── OrderFulfillmentFailedEvent.java
+                    │   │   │   └── OrderMovedToManualReviewEvent.java
                     │   │   ├── repository/
                     │   │   │   └── OrderRepository.java
                     │   │   └── service/
-                    │   │       └── OrderDomainService.java
+                    │   │       ├── OrderDomainService.java
+                    │   │       └── OrderFulfillmentDomainService.java
                     │   │
                     │   └── infrastructure/
                     │       ├── repository/
-                    │       │   └── JpaOrderRepository.java
+                    │       │   ├── JpaOrderRepository.java
+                    │       │   └── JpaManualReviewRepository.java
                     │       ├── mapper/
-                    │       │   └── OrderMapper.java
-                    │       └── persistence/
-                    │           └── OrderEntity.java
+                    │       │   ├── OrderMapper.java
+                    │       │   └── ManualReviewMapper.java
+                    │       ├── persistence/
+                    │       │   ├── OrderEntity.java
+                    │       │   └── OrderManualReviewEntity.java
+                    │       └── scheduler/
+                    │           └── FulfillmentScheduler.java
                     │
                     ├── inventory/
                     │   ├── api/
@@ -1046,14 +1190,20 @@ direction LR
 class Order {
   +orderId
   +status: OrderStatus
+  +scheduledPickupTime: ScheduledPickupTime
+  +fulfillmentLeadTime: FulfillmentLeadTime
   +reservationInfo: ReservationInfo
   +shipmentInfo: ShipmentInfo
   +List~OrderLineItem~
   --
   +createOrder()
+  +scheduleForLaterFulfillment()
+  +markReadyForFulfillment()
+  +isReadyForFulfillment()
   +reserveInventory()
   +commitOrder()
   +markAsShipped()
+  +markAsFailedToReserve()
 }
 
 class OrderLineItem {
@@ -1075,13 +1225,65 @@ class ShipmentInfo {
 
 class OrderStatus {
   <<ValueObject>>
-  +status: CREATED | RESERVED | COMMITTED | SHIPPED
+  +status: CREATED | SCHEDULED | AWAITING_FULFILLMENT | RESERVED | COMMITTED | SHIPPED | FAILED_TO_RESERVE
+}
+
+class ScheduledPickupTime {
+  <<ValueObject>>
+  +pickupTime: LocalDateTime
+  --
+  +isInFuture()
+  +calculateFulfillmentStartTime(leadTime)
+}
+
+class FulfillmentLeadTime {
+  <<ValueObject>>
+  +duration: Duration
+  --
+  +getMinutes()
+  +getHours()
+}
+
+class OrderManualReview {
+  +reviewId: String
+  +orderId: String
+  +failureReason: ReservationFailureReason
+  +priority: ReviewPriority
+  +status: ReviewStatus
+  +createdAt: LocalDateTime
+  +resolvedAt: LocalDateTime
+  +notes: String
+  --
+  +create()
+  +resolve()
+}
+
+class ReservationFailureReason {
+  <<ValueObject>>
+  +reason: String
+  +isTransient: Boolean
+  +isCritical: Boolean
+}
+
+class ReviewPriority {
+  <<ValueObject>>
+  +priority: URGENT | HIGH | NORMAL | LOW
+}
+
+class ReviewStatus {
+  <<ValueObject>>
+  +status: PENDING | IN_PROGRESS | RESOLVED
 }
 
 Order "1" --> "many" OrderLineItem
 Order --> ReservationInfo
 Order --> ShipmentInfo
 Order --> OrderStatus
+Order --> ScheduledPickupTime
+Order --> FulfillmentLeadTime
+OrderManualReview --> ReservationFailureReason
+OrderManualReview --> ReviewPriority
+OrderManualReview --> ReviewStatus
 
 %% ===========================
 %%  WES Context
@@ -1275,6 +1477,7 @@ class ObservationResult {
   +orderType
   +warehouseId
   +status
+  +scheduledPickupTime: LocalDateTime
   +List~ObservedOrderItem~ items
   +observedAt
 }
