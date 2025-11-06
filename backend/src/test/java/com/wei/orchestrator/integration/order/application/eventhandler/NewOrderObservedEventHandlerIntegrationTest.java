@@ -133,6 +133,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
                             "EXPRESS",
                             "WH-002",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -170,6 +171,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
                             "STANDARD",
                             "WH-001",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -235,6 +237,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
                         "STANDARD",
                         "WH-001",
                         "NEW",
+                        null,
                         items,
                         LocalDateTime.now());
 

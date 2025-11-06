@@ -1,6 +1,7 @@
 package com.wei.orchestrator.order.infrastructure.persistence;
 
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,6 +14,12 @@ public class OrderEntity {
 
     @Column(name = "status")
     private String status;
+
+    @Column(name = "scheduled_pickup_time")
+    private LocalDateTime scheduledPickupTime;
+
+    @Column(name = "fulfillment_lead_time_minutes")
+    private Long fulfillmentLeadTimeMinutes;
 
     @Column(name = "reservation_warehouse_id")
     private String reservationWarehouseId;
@@ -48,6 +55,22 @@ public class OrderEntity {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public LocalDateTime getScheduledPickupTime() {
+        return scheduledPickupTime;
+    }
+
+    public void setScheduledPickupTime(LocalDateTime scheduledPickupTime) {
+        this.scheduledPickupTime = scheduledPickupTime;
+    }
+
+    public Long getFulfillmentLeadTimeMinutes() {
+        return fulfillmentLeadTimeMinutes;
+    }
+
+    public void setFulfillmentLeadTimeMinutes(Long fulfillmentLeadTimeMinutes) {
+        this.fulfillmentLeadTimeMinutes = fulfillmentLeadTimeMinutes;
     }
 
     public String getReservationWarehouseId() {

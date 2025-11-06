@@ -14,6 +14,7 @@ public class ObservationResult {
     private final String orderType;
     private final String warehouseId;
     private final String status;
+    private final LocalDateTime scheduledPickupTime;
     private final List<ObservedOrderItem> items;
     private final LocalDateTime observedAt;
 
@@ -25,6 +26,7 @@ public class ObservationResult {
             String orderType,
             String warehouseId,
             String status,
+            LocalDateTime scheduledPickupTime,
             List<ObservedOrderItem> items,
             LocalDateTime observedAt) {
         if (orderId == null || orderId.trim().isEmpty()) {
@@ -61,6 +63,7 @@ public class ObservationResult {
         this.orderType = orderType;
         this.warehouseId = warehouseId;
         this.status = status;
+        this.scheduledPickupTime = scheduledPickupTime;
         this.items = new ArrayList<>(items);
         this.observedAt = observedAt;
     }
@@ -93,6 +96,10 @@ public class ObservationResult {
         return status;
     }
 
+    public LocalDateTime getScheduledPickupTime() {
+        return scheduledPickupTime;
+    }
+
     public List<ObservedOrderItem> getItems() {
         return Collections.unmodifiableList(items);
     }
@@ -113,6 +120,7 @@ public class ObservationResult {
                 && Objects.equals(orderType, that.orderType)
                 && Objects.equals(warehouseId, that.warehouseId)
                 && Objects.equals(status, that.status)
+                && Objects.equals(scheduledPickupTime, that.scheduledPickupTime)
                 && Objects.equals(items, that.items)
                 && Objects.equals(observedAt, that.observedAt);
     }
@@ -127,6 +135,7 @@ public class ObservationResult {
                 orderType,
                 warehouseId,
                 status,
+                scheduledPickupTime,
                 items,
                 observedAt);
     }
@@ -155,6 +164,8 @@ public class ObservationResult {
                 + ", status='"
                 + status
                 + '\''
+                + ", scheduledPickupTime="
+                + scheduledPickupTime
                 + ", items="
                 + items
                 + ", observedAt="

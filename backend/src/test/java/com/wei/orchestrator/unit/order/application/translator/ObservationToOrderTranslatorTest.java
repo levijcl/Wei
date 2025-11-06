@@ -43,6 +43,7 @@ class ObservationToOrderTranslatorTest {
                             "STANDARD",
                             "WH-01",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -81,6 +82,7 @@ class ObservationToOrderTranslatorTest {
                             "EXPRESS",
                             "WH-02",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -128,6 +130,7 @@ class ObservationToOrderTranslatorTest {
                             "STANDARD",
                             "WH-01",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -163,6 +166,7 @@ class ObservationToOrderTranslatorTest {
                             "BULK",
                             "WH-03",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -192,6 +196,7 @@ class ObservationToOrderTranslatorTest {
                             "STANDARD",
                             "WH-01",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -224,6 +229,7 @@ class ObservationToOrderTranslatorTest {
                             "STANDARD",
                             "WH-01",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -254,6 +260,7 @@ class ObservationToOrderTranslatorTest {
                             "STANDARD",
                             "WH-01",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -279,6 +286,7 @@ class ObservationToOrderTranslatorTest {
                             "STANDARD",
                             "WH-01",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
 
@@ -291,6 +299,7 @@ class ObservationToOrderTranslatorTest {
                             "EXPRESS",
                             "WH-02",
                             "PROCESSING",
+                            null,
                             items,
                             LocalDateTime.now());
 

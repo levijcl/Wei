@@ -126,6 +126,7 @@ class NewOrderObservedEventHandlerTest {
                         "STANDARD",
                         "WH-001",
                         "NEW",
+                        null,
                         items,
                         LocalDateTime.now());
 

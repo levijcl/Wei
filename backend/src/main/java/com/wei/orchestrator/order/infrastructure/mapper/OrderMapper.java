@@ -1,9 +1,12 @@
 package com.wei.orchestrator.order.infrastructure.mapper;
 
 import com.wei.orchestrator.order.domain.model.*;
+import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
+import com.wei.orchestrator.order.domain.model.valueobject.ScheduledPickupTime;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderEntity;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderLineItemEntity;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -17,6 +20,14 @@ public class OrderMapper {
         OrderEntity entity = new OrderEntity();
         entity.setOrderId(domain.getOrderId());
         entity.setStatus(domain.getStatus().name());
+
+        if (domain.getScheduledPickupTime() != null) {
+            entity.setScheduledPickupTime(domain.getScheduledPickupTime().getPickupTime());
+        }
+
+        if (domain.getFulfillmentLeadTime() != null) {
+            entity.setFulfillmentLeadTimeMinutes(domain.getFulfillmentLeadTime().getMinutes());
+        }
 
         if (domain.getReservationInfo() != null) {
             entity.setReservationWarehouseId(domain.getReservationInfo().getWarehouseId());
@@ -50,6 +61,16 @@ public class OrderMapper {
 
         Order order = new Order(entity.getOrderId(), items);
         order.setStatus(OrderStatus.valueOf(entity.getStatus()));
+
+        if (entity.getScheduledPickupTime() != null) {
+            order.setScheduledPickupTime(new ScheduledPickupTime(entity.getScheduledPickupTime()));
+        }
+
+        if (entity.getFulfillmentLeadTimeMinutes() != null) {
+            order.setFulfillmentLeadTime(
+                    new FulfillmentLeadTime(
+                            Duration.ofMinutes(entity.getFulfillmentLeadTimeMinutes())));
+        }
 
         if (entity.getReservationWarehouseId() != null) {
             ReservationInfo reservationInfo =

@@ -8,6 +8,7 @@ import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.order.domain.service.OrderDomainService;
 import java.util.Optional;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,70 +22,73 @@ class OrderDomainServiceTest {
 
     @InjectMocks private OrderDomainService orderDomainService;
 
-    @Test
-    void shouldPassValidationWhenOrderIdDoesNotExist() {
-        String orderId = "ORDER-001";
-        when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
+    @Nested
+    class validateOrderCreationMethodTest {
+        @Test
+        void shouldPassValidationWhenOrderIdDoesNotExist() {
+            String orderId = "ORDER-001";
+            when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
-        assertDoesNotThrow(() -> orderDomainService.validateOrderCreation(orderId));
+            assertDoesNotThrow(() -> orderDomainService.validateOrderCreation(orderId));
 
-        verify(orderRepository, times(1)).findById(orderId);
-    }
+            verify(orderRepository, times(1)).findById(orderId);
+        }
 
-    @Test
-    void shouldThrowExceptionWhenOrderIdAlreadyExists() {
-        String orderId = "ORDER-001";
-        Order existingOrder = mock(Order.class);
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
+        @Test
+        void shouldThrowExceptionWhenOrderIdAlreadyExists() {
+            String orderId = "ORDER-001";
+            Order existingOrder = mock(Order.class);
+            when(orderRepository.findById(orderId)).thenReturn(Optional.of(existingOrder));
 
-        OrderAlreadyExistsException exception =
-                assertThrows(
-                        OrderAlreadyExistsException.class,
-                        () -> {
-                            orderDomainService.validateOrderCreation(orderId);
-                        });
+            OrderAlreadyExistsException exception =
+                    assertThrows(
+                            OrderAlreadyExistsException.class,
+                            () -> {
+                                orderDomainService.validateOrderCreation(orderId);
+                            });
 
-        assertTrue(exception.getMessage().contains("ORDER-001"));
-        assertTrue(exception.getMessage().contains("already exists"));
-        verify(orderRepository, times(1)).findById(orderId);
-    }
+            assertTrue(exception.getMessage().contains("ORDER-001"));
+            assertTrue(exception.getMessage().contains("already exists"));
+            verify(orderRepository, times(1)).findById(orderId);
+        }
 
-    @Test
-    void shouldThrowExceptionWhenOrderIdIsNull() {
-        IllegalArgumentException exception =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> {
-                            orderDomainService.validateOrderCreation(null);
-                        });
+        @Test
+        void shouldThrowExceptionWhenOrderIdIsNull() {
+            IllegalArgumentException exception =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> {
+                                orderDomainService.validateOrderCreation(null);
+                            });
 
-        assertTrue(exception.getMessage().contains("Order ID cannot be null or empty"));
-        verify(orderRepository, never()).findById(any());
-    }
+            assertTrue(exception.getMessage().contains("Order ID cannot be null or empty"));
+            verify(orderRepository, never()).findById(any());
+        }
 
-    @Test
-    void shouldThrowExceptionWhenOrderIdIsEmpty() {
-        IllegalArgumentException exception =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> {
-                            orderDomainService.validateOrderCreation("");
-                        });
+        @Test
+        void shouldThrowExceptionWhenOrderIdIsEmpty() {
+            IllegalArgumentException exception =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> {
+                                orderDomainService.validateOrderCreation("");
+                            });
 
-        assertTrue(exception.getMessage().contains("Order ID cannot be null or empty"));
-        verify(orderRepository, never()).findById(any());
-    }
+            assertTrue(exception.getMessage().contains("Order ID cannot be null or empty"));
+            verify(orderRepository, never()).findById(any());
+        }
 
-    @Test
-    void shouldThrowExceptionWhenOrderIdIsBlank() {
-        IllegalArgumentException exception =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> {
-                            orderDomainService.validateOrderCreation("   ");
-                        });
+        @Test
+        void shouldThrowExceptionWhenOrderIdIsBlank() {
+            IllegalArgumentException exception =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> {
+                                orderDomainService.validateOrderCreation("   ");
+                            });
 
-        assertTrue(exception.getMessage().contains("Order ID cannot be null or empty"));
-        verify(orderRepository, never()).findById(any());
+            assertTrue(exception.getMessage().contains("Order ID cannot be null or empty"));
+            verify(orderRepository, never()).findById(any());
+        }
     }
 }

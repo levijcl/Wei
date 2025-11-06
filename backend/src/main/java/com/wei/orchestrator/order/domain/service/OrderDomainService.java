@@ -1,7 +1,11 @@
 package com.wei.orchestrator.order.domain.service;
 
 import com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException;
+import com.wei.orchestrator.order.domain.model.Order;
+import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
+import com.wei.orchestrator.order.domain.model.valueobject.ScheduledPickupTime;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import java.time.LocalDateTime;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -20,6 +24,21 @@ public class OrderDomainService {
 
         if (orderRepository.findById(orderId).isPresent()) {
             throw new OrderAlreadyExistsException("Order with ID " + orderId + " already exists");
+        }
+    }
+
+    public void processOrderScheduling(
+            Order order,
+            ScheduledPickupTime scheduledPickupTime,
+            FulfillmentLeadTime fulfillmentLeadTime,
+            LocalDateTime currentTime) {
+
+        if (scheduledPickupTime.isInFuture(currentTime)) {
+            order.scheduleForLaterFulfillment(scheduledPickupTime, fulfillmentLeadTime);
+        } else {
+            order.setScheduledPickupTime(scheduledPickupTime);
+            order.setFulfillmentLeadTime(fulfillmentLeadTime);
+            order.markReadyForFulfillment();
         }
     }
 }
