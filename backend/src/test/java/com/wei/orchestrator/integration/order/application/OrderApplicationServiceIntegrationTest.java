@@ -4,10 +4,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
+import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -168,6 +171,191 @@ class OrderApplicationServiceIntegrationTest {
 
             assertTrue(exception.getMessage().contains("ORDER-DUPLICATE"));
             assertTrue(exception.getMessage().contains("already exists"));
+        }
+
+        @Test
+        void shouldCreateOrderWithFutureScheduledPickupTime() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-900", 5, new BigDecimal("50.00")));
+
+            LocalDateTime futurePickupTime = LocalDateTime.now().plusHours(3);
+            CreateOrderCommand command =
+                    new CreateOrderCommand("ORDER-SCHEDULED-001", items, futurePickupTime, null);
+
+            Order createdOrder = orderApplicationService.createOrder(command);
+
+            assertNotNull(createdOrder);
+            assertEquals(OrderStatus.SCHEDULED, createdOrder.getStatus());
+            assertNotNull(createdOrder.getScheduledPickupTime());
+            assertNotNull(createdOrder.getFulfillmentLeadTime());
+            assertEquals(futurePickupTime, createdOrder.getScheduledPickupTime().getPickupTime());
+            assertEquals(120, createdOrder.getFulfillmentLeadTime().getMinutes());
+
+            Optional<Order> persistedOrder = orderRepository.findById("ORDER-SCHEDULED-001");
+            assertTrue(persistedOrder.isPresent());
+            assertEquals(OrderStatus.SCHEDULED, persistedOrder.get().getStatus());
+        }
+
+        @Test
+        void shouldCreateOrderWithPastScheduledPickupTimeAsAwaitingFulfillment() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto(
+                            "SKU-901", 10, new BigDecimal("100.00")));
+
+            LocalDateTime pastPickupTime = LocalDateTime.now().minusHours(1);
+            CreateOrderCommand command =
+                    new CreateOrderCommand("ORDER-IMMEDIATE-001", items, pastPickupTime, null);
+
+            Order createdOrder = orderApplicationService.createOrder(command);
+
+            assertNotNull(createdOrder);
+            assertEquals(OrderStatus.AWAITING_FULFILLMENT, createdOrder.getStatus());
+            assertNotNull(createdOrder.getScheduledPickupTime());
+            assertNotNull(createdOrder.getFulfillmentLeadTime());
+
+            Optional<Order> persistedOrder = orderRepository.findById("ORDER-IMMEDIATE-001");
+            assertTrue(persistedOrder.isPresent());
+            assertEquals(OrderStatus.AWAITING_FULFILLMENT, persistedOrder.get().getStatus());
+        }
+
+        @Test
+        void shouldCreateOrderWithCustomFulfillmentLeadTime() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-902", 3, new BigDecimal("30.00")));
+
+            LocalDateTime futurePickupTime = LocalDateTime.now().plusHours(5);
+            Duration customLeadTime = Duration.ofHours(3);
+            CreateOrderCommand command =
+                    new CreateOrderCommand(
+                            "ORDER-CUSTOM-LEAD-001", items, futurePickupTime, customLeadTime);
+
+            Order createdOrder = orderApplicationService.createOrder(command);
+
+            assertNotNull(createdOrder);
+            assertEquals(OrderStatus.SCHEDULED, createdOrder.getStatus());
+            assertEquals(180, createdOrder.getFulfillmentLeadTime().getMinutes());
+            assertEquals(3, createdOrder.getFulfillmentLeadTime().getHours());
+
+            Optional<Order> persistedOrder = orderRepository.findById("ORDER-CUSTOM-LEAD-001");
+            assertTrue(persistedOrder.isPresent());
+            assertEquals(180, persistedOrder.get().getFulfillmentLeadTime().getMinutes());
+        }
+
+        @Test
+        void shouldCreateOrderWithDefaultFulfillmentLeadTime() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-903", 7, new BigDecimal("70.00")));
+
+            LocalDateTime futurePickupTime = LocalDateTime.now().plusHours(4);
+            CreateOrderCommand command =
+                    new CreateOrderCommand("ORDER-DEFAULT-LEAD-001", items, futurePickupTime, null);
+
+            Order createdOrder = orderApplicationService.createOrder(command);
+
+            assertNotNull(createdOrder);
+            assertEquals(OrderStatus.SCHEDULED, createdOrder.getStatus());
+            assertEquals(120, createdOrder.getFulfillmentLeadTime().getMinutes());
+            assertEquals(2, createdOrder.getFulfillmentLeadTime().getHours());
+
+            Optional<Order> persistedOrder = orderRepository.findById("ORDER-DEFAULT-LEAD-001");
+            assertTrue(persistedOrder.isPresent());
+            assertEquals(120, persistedOrder.get().getFulfillmentLeadTime().getMinutes());
+        }
+
+        @Test
+        void shouldCreateOrderWithSchedulingFieldsPersisted() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto("SKU-904", 2, new BigDecimal("20.00")));
+
+            LocalDateTime scheduledTime = LocalDateTime.of(2025, 11, 6, 14, 0);
+            Duration leadTime = Duration.ofMinutes(90);
+            CreateOrderCommand command =
+                    new CreateOrderCommand("ORDER-PERSIST-001", items, scheduledTime, leadTime);
+
+            orderApplicationService.createOrder(command);
+
+            Optional<Order> persistedOrder = orderRepository.findById("ORDER-PERSIST-001");
+            assertTrue(persistedOrder.isPresent());
+
+            Order order = persistedOrder.get();
+            assertNotNull(order.getScheduledPickupTime());
+            assertNotNull(order.getFulfillmentLeadTime());
+            assertEquals(scheduledTime, order.getScheduledPickupTime().getPickupTime());
+            assertEquals(90, order.getFulfillmentLeadTime().getMinutes());
+        }
+    }
+
+    @Nested
+    class initiateFulfillment {
+
+        @Test
+        void shouldInitiateFulfillmentForScheduledOrder() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto(
+                            "SKU-1000", 10, new BigDecimal("100.00")));
+
+            LocalDateTime futurePickupTime = LocalDateTime.now().plusHours(2);
+            CreateOrderCommand createCommand =
+                    new CreateOrderCommand("ORDER-INITIATE-001", items, futurePickupTime, null);
+
+            orderApplicationService.createOrder(createCommand);
+
+            Optional<Order> scheduledOrder = orderRepository.findById("ORDER-INITIATE-001");
+            assertTrue(scheduledOrder.isPresent());
+            assertEquals(OrderStatus.SCHEDULED, scheduledOrder.get().getStatus());
+
+            InitiateFulfillmentCommand initiateCommand =
+                    new InitiateFulfillmentCommand("ORDER-INITIATE-001");
+            orderApplicationService.initiateFulfillment(initiateCommand);
+
+            Optional<Order> awaitingOrder = orderRepository.findById("ORDER-INITIATE-001");
+            assertTrue(awaitingOrder.isPresent());
+            assertEquals(OrderStatus.AWAITING_FULFILLMENT, awaitingOrder.get().getStatus());
+        }
+
+        @Test
+        void shouldInitiateFulfillmentForCreatedOrder() {
+            List<CreateOrderCommand.OrderLineItemDto> items = new ArrayList<>();
+            items.add(
+                    new CreateOrderCommand.OrderLineItemDto(
+                            "SKU-1001", 5, new BigDecimal("50.00")));
+
+            CreateOrderCommand createCommand = new CreateOrderCommand("ORDER-INITIATE-002", items);
+            orderApplicationService.createOrder(createCommand);
+
+            Optional<Order> createdOrder = orderRepository.findById("ORDER-INITIATE-002");
+            assertTrue(createdOrder.isPresent());
+            assertEquals(OrderStatus.CREATED, createdOrder.get().getStatus());
+
+            InitiateFulfillmentCommand initiateCommand =
+                    new InitiateFulfillmentCommand("ORDER-INITIATE-002");
+            orderApplicationService.initiateFulfillment(initiateCommand);
+
+            Optional<Order> awaitingOrder = orderRepository.findById("ORDER-INITIATE-002");
+            assertTrue(awaitingOrder.isPresent());
+            assertEquals(OrderStatus.AWAITING_FULFILLMENT, awaitingOrder.get().getStatus());
+        }
+
+        @Test
+        void shouldThrowExceptionWhenInitiatingFulfillmentForNonExistentOrder() {
+            InitiateFulfillmentCommand command =
+                    new InitiateFulfillmentCommand("NON-EXISTENT-ORDER");
+
+            IllegalArgumentException exception =
+                    assertThrows(
+                            IllegalArgumentException.class,
+                            () -> {
+                                orderApplicationService.initiateFulfillment(command);
+                            });
+
+            assertTrue(exception.getMessage().contains("Order not found"));
+            assertTrue(exception.getMessage().contains("NON-EXISTENT-ORDER"));
         }
     }
 }

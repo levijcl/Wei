@@ -18,6 +18,8 @@ spring:
 scheduler:
   observer:
     fixed-delay: 30000
+  order:
+    fulfillment-delay: 60000
   lock:
     ttl: 60000
 wes:

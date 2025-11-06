@@ -337,6 +337,7 @@ class OrderObserverTest {
                             "TYPE_A",
                             "WH001",
                             "NEW",
+                            null,
                             items,
                             LocalDateTime.now());
             results.add(result);

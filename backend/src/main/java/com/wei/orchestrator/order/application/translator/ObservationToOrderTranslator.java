@@ -21,7 +21,10 @@ public class ObservationToOrderTranslator {
                         .map(this::translateItem)
                         .collect(Collectors.toList());
 
-        return new CreateOrderCommand(observationResult.getOrderId(), items);
+        CreateOrderCommand command = new CreateOrderCommand(observationResult.getOrderId(), items);
+        command.setScheduledPickupTime(observationResult.getScheduledPickupTime());
+
+        return command;
     }
 
     private OrderLineItemDto translateItem(ObservedOrderItem observedItem) {

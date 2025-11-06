@@ -41,6 +41,7 @@ public class ExternalOrderSourceAdapter implements OrderSourcePort {
                     String orderType = resultSet.getString("order_type");
                     String warehouseId = resultSet.getString("warehouse_id");
                     String status = resultSet.getString("status");
+                    Timestamp scheduledPickupTime = resultSet.getTimestamp("scheduled_pickup_time");
                     Timestamp createdAt = resultSet.getTimestamp("created_at");
 
                     List<ObservedOrderItem> items = fetchOrderItems(connection, orderId);
@@ -55,6 +56,9 @@ public class ExternalOrderSourceAdapter implements OrderSourcePort {
                                         orderType,
                                         warehouseId,
                                         status,
+                                        scheduledPickupTime != null
+                                                ? scheduledPickupTime.toLocalDateTime()
+                                                : null,
                                         items,
                                         createdAt.toLocalDateTime());
 
@@ -111,7 +115,7 @@ public class ExternalOrderSourceAdapter implements OrderSourcePort {
             sql =
                     """
                     SELECT order_id, customer_name, customer_email, shipping_address,
-                           order_type, warehouse_id, status, created_at
+                           order_type, warehouse_id, status, scheduled_pickup_time, created_at
                     FROM orders
                     WHERE status = 'NEW'
                     ORDER BY created_at ASC
@@ -121,7 +125,7 @@ public class ExternalOrderSourceAdapter implements OrderSourcePort {
             sql =
                     """
                     SELECT order_id, customer_name, customer_email, shipping_address,
-                           order_type, warehouse_id, status, created_at
+                           order_type, warehouse_id, status, scheduled_pickup_time, created_at
                     FROM orders
                     WHERE status = 'NEW'
                     AND created_at > ?
