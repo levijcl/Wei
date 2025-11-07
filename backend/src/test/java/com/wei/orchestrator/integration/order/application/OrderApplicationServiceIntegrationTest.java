@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
+import com.wei.orchestrator.order.application.eventhandler.OrderReadyForFulfillmentEventHandler;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -27,6 +29,8 @@ class OrderApplicationServiceIntegrationTest {
     @Autowired private OrderApplicationService orderApplicationService;
 
     @Autowired private OrderRepository orderRepository;
+
+    @MockitoBean private OrderReadyForFulfillmentEventHandler orderReadyForFulfillmentEventHandler;
 
     @Nested
     class createOrder {
