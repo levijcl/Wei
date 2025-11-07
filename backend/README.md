@@ -1,6 +1,6 @@
 # 倉儲出貨流程協調系統（Orchestrator System）設計文件
 
-## 1. 系統定位與角色
+## 系統定位與角色
 
 本系統為一套 **Orchestrator System（倉儲流程協調系統）**，負責協調與整合內部與外部系統間的出貨流程，包括：
 
@@ -20,9 +20,9 @@
     2. 維持資料一致性與狀態同步。
     3. 管理異常重試與錯誤回復。
 
-## 2. 系統整體架構
+## 系統整體架構
 
-### 2.1 系統組成
+### 系統組成
 
 | 系統名稱 | 說明 |
 |-----------|------|
@@ -32,143 +32,9 @@
 | **WES System** | 外包智慧倉儲控制系統，僅支援 API，不支援 webhook；需由本系統主動 polling 任務狀態 |
 | **Logistics System** | 外包物流出貨系統，負責出貨單建立與配送狀態同步 |
 
-## 模組
+## 系統核心流程
 
-### Order Polling 模組
-
-- 由 Orchestrator 系統定時（例如每 30 秒或 1 分鐘）呼叫 Order Source System Database
-- 查詢新訂單（依狀態或建立時間區間）。
-- 對於每筆新訂單：
-    1. 寫入 Orchestrator 的訂單暫存表（Order Buffer Table）。
-    2. 在原訂單系統中標記為「已接收」或「處理中」。
-    3. 判斷訂單所屬流程類型（流程 A / 流程 B），建立對應的任務。
-
-#### 重複偵測機制
-
-- 每筆訂單以 `order_id` 進行 idempotent 檢查。
-- 若偵測到重複訂單，忽略後續重複資料。
-- 訂單狀態設計：
-  - `NEW`：尚未處理
-  - `IN_PROGRESS`：處理中
-  - `COMPLETED`：已完成
-  - `FAILED`：處理失敗，待重試或人工介入
-
-#### 輪詢頻率與效能考量
-
-- 預設每分鐘一次，可依負載調整。
-- 若訂單量大，可採 **分區式輪詢**（依倉別或建立時間區段分批）。
-- 應設計 **Job Lock 機制**，確保同時間僅一個 polling job 執行。
-- 可記錄上次輪詢時間戳（last polled timestamp）以避免重疊區間。
-
-### 資料同步模組
-
-#### 庫存差異處理（Inventory ↔ WES）
-
-#### 問題說明
-
-在整合環境中，`Inventory 系統` 與 `WES 系統` 均維護庫存資料，但由於作業流程複雜、API 延遲或作業異常，兩者間可能出現以下狀況：
-
-| 差異類型        | 說明                                                             |
-| ----------- | -------------------------------------------------------------- |
-| **數量差異**    | WES 回報實際庫存與 Inventory 記錄不同（例如 WES 有 95 件，但 Inventory 顯示 100 件） |
-| **儲位差異**    | WES 的儲位資料與 Inventory 的倉別或區域設定不一致                               |
-| **任務差異**    | WES 已完成 picking，但 Inventory 未 commit reservation               |
-| **回庫/報廢差異** | WES 有異動，但 Inventory 未更新（或反之）                                   |
-
-#### 差異可能來源
-
-- WES API 任務回報延遲或失敗（callback/polling 超時）
-- Inventory reservation/commit 流程中斷（例如系統重啟、DB transaction rollback）
-- 實體倉儲作業異常（操作員誤放貨物）
-- 系統批次同步任務失敗
-
-#### 差異偵測機制
-
-系統應具備 **雙向庫存比對機制**：
-
-1. **WES → Inventory 定期同步任務**
-
-- WES 端提供倉別與 SKU 層級的「庫存快照」API。
-- Orchestrator 每日（或每小時）呼叫此 API，與 Inventory 系統資料比對。
-- 若發現差異，記錄在 `StockDiscrepancyLog`。
-
-2. **Inventory → WES 對照同步**
-
-- 當 Inventory 有人工調整、退貨、報廢或庫存更動時，應主動通知 Orchestrator。
-- Orchestrator 再透過 WES API 更新對應數量。
-- 若更新失敗，進入「待同步佇列」。
-
-#### 差異處理策略
-
-#### Case：**Inventory 有庫存但 WES 顯示無庫存**
-
-**狀況**
-代表實體倉庫缺貨，但 Inventory 資料未更新。
-
-**解法**
-
-1. 暫停該 SKU 的自動訂單分配。
-2. 通知 Inventory 系統進行校正。
-3. 可由 WES 提供的快照覆蓋同步數據，更新 Inventory。
-
-#### Case：**WES 有庫存但 Inventory 顯示為 0**
-
-**狀況**
-通常為回庫或報廢流程未更新。
-
-**解法**
-
-1. Orchestrator 偵測差異後自動補上 Inventory 更新。
-2. 若多筆 SKU 發生類似狀況，排程全倉同步任務（Full Sync Job）。
-
-#### Case：**兩邊庫存差異持續超過閾值**
-
-**狀況**
-例如某 SKU 差異 >5%。
-
-**解法**
-
-1. 自動產生 `Stock Reconciliation Task`。
-2. 指派給倉庫作業員進行盤點。
-3. Orchestrator 在盤點完成後重新同步雙方數據。
-
-### 差異紀錄與報表
-
-建立 `StockDiscrepancyLog` 資料表，紀錄所有差異事件：
-
-| 欄位            | 說明                  |
-| ------------- | ------------------- |
-| sku_code      | 商品代碼                |
-| warehouse_id  | 倉別代碼                |
-| inventory_qty | Inventory 系統數量      |
-| wes_qty       | WES 系統數量            |
-| discrepancy   | 差異量                 |
-| detected_at   | 偵測時間                |
-| status        | `OPEN` / `RESOLVED` |
-| resolved_by   | 處理人員                |
-| note          | 備註                  |
-
-報表可依照倉別、商品、時間區間進行查詢，支援每日快照比較。
-
-#### 庫存同步策略總覽
-
-| 情境     | 主導系統      | 同步方向        | 機制               |
-| ------ | --------- | ----------- | ---------------- |
-| 出貨任務完成 | WES       | → Inventory | commit API       |
-| 回庫任務完成 | WES       | → Inventory | restock API      |
-| 人工調整庫存 | Inventory | → WES       | update stock API |
-| 定期盤點同步 | 雙向        | ↔           | 每日 Full Sync Job |
-
-#### 建議實作要點
-
-- 每筆庫存變動皆附帶 `transaction_id` 以追蹤來源。
-- 若兩系統都支援 version number 或 updated_at 欄位，可用作增量同步依據。
-- Polling 任務應有重試機制與防止重疊執行的 lock。
-- 建議在 Orchestrator 加入「庫存一致性 Dashboard」，即時顯示差異統計。
-
-## 4. 系統核心流程
-
-### 4.1 流程 A：自動倉揀貨 → Picking Zone 待取貨
+### 流程 A：自動倉揀貨 → Picking Zone 待取貨
 
 **流程說明：**
 適用於需要 operator 揀貨、delivery man 取貨的情境。
@@ -185,7 +51,7 @@
 6. 通知內部系統或介面顯示「可取貨」。
 7. Delivery man 取貨 → 呼叫 Logistics API 更新出貨狀態（例如 `dispatched`）。
 
-### 4.2 流程 B：自動倉揀貨 + Packing List 印製
+### 流程 B：自動倉揀貨 + Packing List 印製
 
 **流程說明：**
 適用於由 operator 負責揀貨與包裝的情境。
@@ -202,7 +68,7 @@
 6. 呼叫 Logistics 系統建立出貨單與標籤。
 7. 更新 Orchestrator 訂單狀態為「已出貨」。
 
-### 4.3 回庫（Return / Restock）流程
+### 回庫（Return / Restock）流程
 
 **流程說明：**
 處理退貨或回庫場景。
@@ -217,7 +83,7 @@
     - 呼叫 Inventory API 更新庫存（增加庫存量）。
     - 更新訂單與任務狀態為「已回庫」。
 
-### 4.4 人工盤點
+### 人工盤點
 
 **流程說明：**
 適用於由 Inventory 系統與WES之間某SKU差異過大的時候。
@@ -298,6 +164,15 @@
 
 ## ⚙️ Aggregate Relationships Overview
 
+本節展示 Aggregate 之間的關係與互動模式，採用 **事件驅動架構 (Event-Driven Architecture)** 設計。
+
+### 關鍵設計原則
+
+- **Context 間透過事件通訊**：降低耦合，確保邊界清晰
+- **Anti-Corruption Layer**：使用 Port 介面隔離外部系統
+- **Dual-Origin Model**：WES 任務支援雙來源（Orchestrator / WES Direct）
+- **Reservation Lifecycle**：完整的庫存預約生命週期管理
+
 ```mermaid
 graph TD
 
@@ -305,82 +180,288 @@ graph TD
 %% ORDER CONTEXT
 %% =========================
 subgraph OrderContext["📦 Order Context"]
-  OR[Order]
+  direction TB
+  OR[Order<br/>訂單聚合根]
+  OMR[OrderManualReview<br/>人工審核聚合根]
 end
 
 %% =========================
 %% WES CONTEXT
 %% =========================
 subgraph WesContext["🏭 WES Context"]
-  PT[PickingTask<br/>揀貨任務 - 減少庫存]
-  PUT[PutawayTask<br/>上架任務 - 增加庫存]
+  direction TB
+  PT[PickingTask<br/>揀貨任務<br/>出庫 - 減少庫存]
+  PUT[PutawayTask<br/>上架任務<br/>入庫 - 增加庫存]
 end
 
 %% =========================
 %% INVENTORY CONTEXT
 %% =========================
 subgraph InventoryContext["🏬 Inventory Context"]
-  IT[InventoryTransaction]
-  IA[InventoryAdjustment]
+  direction TB
+  IT[InventoryTransaction<br/>庫存交易<br/>Reserve/Consume/Release]
+  IA[InventoryAdjustment<br/>庫存差異調整]
 end
 
 %% =========================
 %% OBSERVATION CONTEXT
 %% =========================
 subgraph ObservationContext["👁️ Observation Context"]
-  OO[OrderObserver]
-  IO[InventoryObserver]
+  direction TB
+  OO[OrderObserver<br/>訂單觀察者]
+  IO[InventoryObserver<br/>庫存觀察者]
   WO[WesObserver<br/>任務發現 + 狀態同步]
+end
+
+%% =========================
+%% INFRASTRUCTURE
+%% =========================
+subgraph Infrastructure["⚙️ Infrastructure Layer"]
+  direction TB
+  FS[FulfillmentScheduler<br/>履約排程器<br/>定期檢查 SCHEDULED 訂單]
 end
 
 %% =========================
 %% EXTERNAL SYSTEMS
 %% =========================
 subgraph ExternalSystems["🌐 External Systems"]
-  WES[WES System<br/>wes_tasks table]
+  direction TB
+  OSS[Order Source System<br/>Oracle Database]
+  INV_SYS[Inventory System<br/>外部庫存 API]
+  WES_SYS[WES System<br/>wes_tasks table<br/>揀貨/上架任務]
 end
 
-%% =========================
-%% CROSS-CONTEXT INTERACTIONS
-%% =========================
+%% ========================================
+%% CROSS-CONTEXT EVENT-DRIVEN INTERACTIONS
+%% ========================================
 
-%% Observation Context → Order
-OO -->|偵測新訂單 / 發事件| OR
+%% 1. Observation → Order: 新訂單偵測 (Event-Driven)
+OO -.->|NewOrderObservedEvent| OR
 
-%% Order → Inventory
-OR -->|建立 Reservation / Commit| IT
+%% 2. Scheduled Fulfillment: FulfillmentScheduler 觸發
+FS -.->|OrderReadyForFulfillmentEvent<br/>時間窗口到達| OR
 
-%% Order → WES (建立揀貨任務)
-OR -->|建立 Picking 任務| PT
+%% 3. Order → Inventory: 預約庫存 (Event → Command)
+OR -.->|OrderReadyForFulfillmentEvent<br/>→ ReserveInventoryCommand| IT
 
-%% PickingTask → Inventory (出庫完成時)
-PT -->|任務完成 / 減少庫存| IT
+%% 4. Inventory → Order: 預約結果 (Event-Driven)
+IT -.->|InventoryReservedEvent| OR
+IT -.->|ReservationFailedEvent<br/>→ OrderFulfillmentFailedEvent| OR
 
-%% PutawayTask → Inventory (入庫完成時)
-PUT -->|任務完成 / 增加庫存| IT
+%% 5. Order → OrderManualReview: 履約失敗處理
+OR -.->|OrderFulfillmentFailedEvent<br/>→ MoveToManualReviewCommand| OMR
 
-%% WES → Inventory Adjustment (差異偵測)
-IO -->|偵測差異 / 觸發修正| IA
-IA -->|生成校正交易| IT
+%% 6. Order → WES: 建立揀貨任務 (Event-Driven)
+OR -.->|OrderReservedEvent<br/>→ CreatePickingTaskForOrderCommand<br/>ORCHESTRATOR_SUBMITTED| PT
 
-%% WesObserver 任務發現與同步
-WO -->|發現新任務<br/>ORCHESTRATOR_SUBMITTED| PT
-WO -->|發現新任務<br/>WES_DIRECT| PT
-WO -->|發現新任務<br/>ORCHESTRATOR_SUBMITTED| PUT
-WO -->|發現新任務<br/>WES_DIRECT| PUT
-WO -->|同步狀態| PT
-WO -->|同步狀態| PUT
+%% 7. WesObserver → WES Tasks: 任務發現 & 狀態同步
+WO -.->|WesTaskDiscoveredEvent<br/>→ CreatePickingTaskFromWesCommand<br/>WES_DIRECT| PT
+WO -.->|WesTaskDiscoveredEvent<br/>→ CreatePutawayTaskFromWesCommand<br/>WES_DIRECT| PUT
+WO -.->|WesTaskStatusUpdatedEvent<br/>→ MarkTaskCompletedCommand| PT
+WO -.->|WesTaskStatusUpdatedEvent<br/>→ MarkTaskCompletedCommand| PUT
 
-%% PickingTask/PutawayTask 與 WES 整合
-PT -.->|submitToWes<br/>WesPort| WES
-PUT -.->|submitToWes<br/>WesPort| WES
-WO -.->|pollAllTasks<br/>WesPort| WES
+%% 8. PickingTask → Inventory: 揀貨完成 - 消耗預約 (Event-Driven)
+PT -.->|PickingTaskCompletedEvent<br/>→ ConsumeReservationCommand<br/>→ CreateOutboundTransactionCommand<br/>減少庫存| IT
 
-%% Observation 觀察
-IO -->|監控庫存快照| IA
-OO -->|監控訂單來源| OR
+%% 9. PutawayTask → Inventory: 上架完成 - 入庫 (Event-Driven)
+PUT -.->|PutawayTaskCompletedEvent<br/>→ CreateInboundTransactionCommand<br/>增加庫存| IT
+
+%% 10. Inventory Observer → Inventory Adjustment: 差異偵測
+IO -.->|InventorySnapshotObservedEvent<br/>→ DetectDiscrepancyCommand| IA
+
+%% 11. Inventory Adjustment → Inventory Transaction: 校正庫存
+IA -.->|InventoryDiscrepancyDetectedEvent<br/>→ ApplyAdjustmentCommand| IT
+
+%% ========================================
+%% PORT INTEGRATIONS (Anti-Corruption Layer)
+%% ========================================
+
+%% Order Observer → External Order Source (via OrderSourcePort)
+OO ===>|OrderSourcePort<br/>pollOrderSource| OSS
+
+%% Inventory Transaction → External Inventory System (via InventoryPort)
+IT ===>|InventoryPort<br/>reserve/consume/release| INV_SYS
+
+%% WES Tasks → External WES System (via WesPort)
+PT ===>|WesPort<br/>submitPickingTask| WES_SYS
+PUT ===>|WesPort<br/>submitPutawayTask| WES_SYS
+WO ===>|WesPort<br/>pollAllTasks| WES_SYS
+
+%% Inventory Observer → External Inventory System
+IO ===>|InventoryPort<br/>getInventorySnapshot| INV_SYS
+
+%% ========================================
+%% STYLING
+%% ========================================
+classDef aggregateStyle fill:#E3F2FD,stroke:#1976D2,stroke-width:3px
+classDef observerStyle fill:#FFF3E0,stroke:#F57C00,stroke-width:2px
+classDef infraStyle fill:#E8F5E9,stroke:#388E3C,stroke-width:2px
+classDef externalStyle fill:#FAFAFA,stroke:#616161,stroke-width:2px
+
+class OR,OMR,PT,PUT,IT,IA aggregateStyle
+class OO,IO,WO observerStyle
+class FS infraStyle
+class OSS,INV_SYS,WES_SYS externalStyle
+```
+
+---
+
+### 📋 關鍵互動流程說明
+
+#### 1️⃣ **訂單觀察與建立**
 
 ```
+OrderObserver (輪詢外部訂單系統)
+  → NewOrderObservedEvent
+  → Order.createOrder()
+  → OrderCreatedEvent / OrderScheduledEvent
+```
+
+#### 2️⃣ **排程履約流程 (Scheduled Fulfillment)**
+
+```
+FulfillmentScheduler (定期檢查 SCHEDULED 訂單)
+  → 判斷時間窗口: 當前時間 >= (scheduledPickupTime - fulfillmentLeadTime)
+  → OrderReadyForFulfillmentEvent
+  → Order.markReadyForFulfillment()
+  → 觸發庫存預約流程
+```
+
+#### 3️⃣ **庫存預約生命週期 (Reservation Lifecycle)**
+
+**A. 預約階段 (Reserve)**
+
+```
+Order (OrderReadyForFulfillmentEvent)
+  → ReserveInventoryCommand
+  → InventoryTransaction.reserveInventory() [透過 InventoryPort 呼叫外部 API]
+  → InventoryReservedEvent / ReservationFailedEvent
+```
+
+**B. 消耗階段 (Consume)**
+
+```
+PickingTask.markCompleted()
+  → PickingTaskCompletedEvent
+  → ConsumeReservationCommand
+  → InventoryTransaction.consumeReservation()
+  → CreateOutboundTransactionCommand (實際扣減庫存)
+  → ReservationConsumedEvent
+```
+
+**C. 釋放階段 (Release)**
+
+```
+Order.cancel() / PickingTask.cancel()
+  → ReleaseReservationCommand
+  → InventoryTransaction.releaseReservation()
+  → ReservationReleasedEvent
+```
+
+#### 4️⃣ **履約失敗處理 (Manual Review)**
+
+```
+ReservationFailedEvent
+  → OrderFulfillmentFailedEvent
+  → MoveToManualReviewCommand
+  → OrderManualReview.create()
+  → OrderMovedToManualReviewEvent
+  → 通知營運團隊處理
+```
+
+#### 5️⃣ **WES 雙來源任務模型 (Dual-Origin Model)**
+
+**ORCHESTRATOR_SUBMITTED (Orchestrator 建立)**
+
+```
+Order.reserveInventory()
+  → OrderReservedEvent
+  → CreatePickingTaskForOrderCommand
+  → PickingTask.createForOrder(orderId) [origin: ORCHESTRATOR_SUBMITTED]
+  → PickingTask.submitToWes() [透過 WesPort]
+```
+
+**WES_DIRECT (WES 系統直接建立)**
+
+```
+WesObserver.pollWesTaskStatus() [透過 WesPort]
+  → 發現新任務 (orchestrator 中不存在)
+  → WesTaskDiscoveredEvent
+  → CreatePickingTaskFromWesCommand
+  → PickingTask.createFromWesTask(wesTask) [origin: WES_DIRECT, orderId: null]
+```
+
+#### 6️⃣ **庫存差異偵測與修正**
+
+```
+InventoryObserver.pollInventorySnapshot() [透過 InventoryPort]
+  → InventorySnapshotObservedEvent
+  → DetectDiscrepancyCommand
+  → InventoryAdjustment.detectDiscrepancy(internalSnapshot, wesSnapshot)
+  → InventoryDiscrepancyDetectedEvent (若有差異)
+  → ApplyAdjustmentCommand
+  → InventoryTransaction.createAdjustmentTransaction()
+  → InventoryAdjustedEvent
+```
+
+#### 7️⃣ **上架任務完成流程**
+
+```
+PutawayTask.markCompleted()
+  → PutawayTaskCompletedEvent
+  → CreateInboundTransactionCommand
+  → InventoryTransaction.createInboundTransaction()
+  → InventoryIncreasedEvent (增加庫存)
+```
+
+---
+
+### 🔗 Port 介面說明 (Anti-Corruption Layer)
+
+系統透過 **Port Interface** 隔離外部系統，確保領域模型純淨：
+
+| Port Interface | 使用者 | 外部系統 | 主要方法 |
+|----------------|--------|---------|----------|
+| **OrderSourcePort** | OrderObserver | Order Source System (Oracle DB) | `pollOrderSource()`, `markAsReceived()` |
+| **InventoryPort** | InventoryTransaction, InventoryObserver | Inventory System API | `reserveInventory()`, `consumeReservation()`, `releaseReservation()`, `getInventorySnapshot()` |
+| **WesPort** | PickingTask, PutawayTask, WesObserver | WES System API | `submitPickingTask()`, `submitPutawayTask()`, `pollAllTasks()`, `updateTaskPriority()`, `cancelTask()` |
+
+---
+
+### 🎯 設計模式應用
+
+#### 1. **Event-Driven Architecture (事件驅動架構)**
+
+- Aggregate 間透過 Domain Events 通訊
+- Event Handler 作為中介，將事件轉換為 Command
+- 降低 Context 間耦合，確保邊界清晰
+
+#### 2. **Anti-Corruption Layer (防腐層)**
+
+- 使用 Port Interface 隔離外部系統
+- Domain Model 不直接依賴外部 API
+- 外部系統變更不影響核心業務邏輯
+
+#### 3. **Observer Pattern (觀察者模式)**
+
+- OrderObserver、InventoryObserver、WesObserver 持續輪詢外部系統
+- 發現變更時發佈事件，觸發後續流程
+
+#### 4. **Dual-Origin Model (雙來源模型)**
+
+- WES 任務支援兩種來源：ORCHESTRATOR_SUBMITTED (由 orchestrator 建立) / WES_DIRECT (WES 系統直接建立)
+- WesObserver 確保所有 WES 任務都被納入管理，維持庫存一致性
+
+#### 5. **Scheduled Execution Pattern (排程執行模式)**
+
+- FulfillmentScheduler 基於時間觸發業務流程
+- 支援延遲履約，避免過早鎖定庫存
+
+#### 6. **Saga Pattern (Long-Running Transaction)**
+
+- 訂單履約流程跨越多個 Aggregate (Order → InventoryTransaction → PickingTask)
+- 透過事件編排 (Event Choreography) 協調分散式交易
+- 支援補償操作 (Release Reservation) 處理失敗情境
 
 ## 🧭 Tactical Design — Detailed Domain Model
 
@@ -426,6 +507,7 @@ OO -->|監控訂單來源| OR
 當訂單建立時，並非所有訂單都需要立即履約。部分訂單包含「預定取貨時間」(Scheduled Pickup Time)，系統應在取貨時間前的適當時機才開始履約流程（預約庫存 → 建立揀貨任務）。
 
 **設計目標：**
+
 - 支援延遲履約，避免過早鎖定庫存
 - 依據取貨時間動態觸發履約流程
 - 處理庫存預約失敗情境，提供人工審核機制
@@ -466,6 +548,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SH
 **基礎設施元件：**
 
 **FulfillmentScheduler（履約排程器）**
+
 - 技術實作：Spring @Scheduled（每 1 分鐘執行）
 - 使用分散式鎖（LockRegistry）防止並行執行
 - 查詢所有 `SCHEDULED` 狀態訂單
@@ -475,6 +558,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SH
 **Domain Service（領域服務）：**
 
 **OrderFulfillmentDomainService**
+
 - 責任：處理人工審核佇列的業務邏輯
 - 協調多個 Aggregate：`Order` + `OrderManualReview`
 - 核心方法：
@@ -488,6 +572,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SH
 **人工審核 Aggregate：**
 
 **OrderManualReview（訂單人工審核）**
+
 - `reviewId`: 審核單 ID
 - `orderId`: 關聯訂單 ID
 - `failureReason`: 失敗原因（ReservationFailureReason）
@@ -539,6 +624,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SH
    - 發佈 OrderMovedToManualReviewEvent
    - 通知營運團隊處理
 ```
+
 ---
 
 ### 🏭 **WES Context**
@@ -548,6 +634,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 透過 **Anti-Corruption Layer (WesPort)** 隔離外部系統，確保領域模型純淨。
 
 **核心設計原則：**
+
 - **管理所有 WES 任務**（包含 orchestrator 提交的任務及 WES 系統直接建立的任務）
 - **雙來源模型 (Dual-Origin Model)**：區分任務來源 (ORCHESTRATOR_SUBMITTED vs WES_DIRECT)
 - **獨立的 Aggregate 設計**：PickingTask（出庫）與 PutawayTask（入庫）為獨立聚合根
@@ -560,6 +647,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 **責任：** 管理出庫揀貨任務，完成後**減少庫存**
 
 **設計要點：**
+
 - **Dual-Origin Model**：
   - `ORCHESTRATOR_SUBMITTED`：由 orchestrator 為訂單建立的任務 (orderId 有值)
   - `WES_DIRECT`：使用者直接在 WES 系統建立的任務 (orderId 為 null)
@@ -568,6 +656,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 - **One Order → Multiple Tasks**：一個訂單可建立多個揀貨任務
 
 **Aggregate 欄位：**
+
 - `taskId` (String) - Orchestrator 內部任務 ID
 - `wesTaskId` (WesTaskId) - WES 系統任務 ID (Value Object)
 - `orderId` (String, nullable) - 關聯的訂單 ID (若為 WES_DIRECT 則為 null)
@@ -578,6 +667,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 - `createdAt`, `submittedAt`, `completedAt` (Timestamp)
 
 **Behaviors：**
+
 - `createForOrder(orderId, items, priority)` - 為訂單建立揀貨任務 (origin: ORCHESTRATOR_SUBMITTED)
 - `createFromWesTask(wesTask)` - 從 WES 發現的任務建立 (origin: WES_DIRECT)
 - `submitToWes(WesPort)` - 提交任務至 WES 系統，取得 wesTaskId
@@ -607,6 +697,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 **責任：** 管理入庫上架任務，完成後**增加庫存**
 
 **設計要點：**
+
 - **Dual-Origin Model**：
   - `ORCHESTRATOR_SUBMITTED`：由 orchestrator 為退貨/入庫建立的任務 (returnId/receivingId 有值)
   - `WES_DIRECT`：使用者直接在 WES 系統建立的任務 (無關聯 ID)
@@ -615,6 +706,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 - **Triggers**：退貨 (Return) 或收貨 (Receiving) 皆可觸發
 
 **Aggregate 欄位：**
+
 - `taskId` (String) - Orchestrator 內部任務 ID
 - `wesTaskId` (WesTaskId) - WES 系統任務 ID (Value Object)
 - `sourceId` (String, nullable) - 來源 ID (returnId 或 receivingId，若為 WES_DIRECT 則為 null)
@@ -626,6 +718,7 @@ WES Context 負責管理倉儲執行系統（WES）中的揀貨與上架任務�
 - `createdAt`, `submittedAt`, `completedAt` (Timestamp)
 
 **Behaviors：**
+
 - `createForReturn(returnId, items, priority)` - 為退貨建立上架任務
 - `createForReceiving(receivingId, items, priority)` - 為收貨建立上架任務
 - `createFromWesTask(wesTask)` - 從 WES 發現的任務建立 (origin: WES_DIRECT)
@@ -671,6 +764,7 @@ interface WesPort {
 #### Priority Management (優先權管理)
 
 **場景 1: 調整單一任務優先權**
+
 ```
 Command: AdjustTaskPriority(taskId, newPriority)
 → PickingTask/PutawayTask.adjustPriority(newPriority)
@@ -679,6 +773,7 @@ Command: AdjustTaskPriority(taskId, newPriority)
 ```
 
 **場景 2: 調整訂單相關所有任務優先權（批次）**
+
 ```
 Command: AdjustOrderPriority(orderId, newPriority, applyToAll=true)
 → Query: 查詢所有 orderId 相關的 PickingTask
@@ -687,6 +782,7 @@ Command: AdjustOrderPriority(orderId, newPriority, applyToAll=true)
 ```
 
 **場景 3: 選擇性調整訂單任務優先權**
+
 ```
 Command: AdjustOrderPriority(orderId, newPriority, taskIds=[id1, id2])
 → 僅調整指定的 taskIds
@@ -751,11 +847,13 @@ Command: AdjustOrderPriority(orderId, newPriority, taskIds=[id1, id2])
 **責任：** 持續輪詢 WES 系統，發現新任務並同步所有任務狀態，確保 orchestrator 與 WES 的庫存一致性
 
 **核心功能：**
+
 - **任務發現 (Task Discovery)**：偵測 WES 系統中直接建立的任務 (WES_DIRECT)
 - **狀態同步 (Status Sync)**：更新 orchestrator 中 PickingTask/PutawayTask 的狀態
 - **庫存一致性保障**：確保所有 WES 任務完成時都能正確觸發庫存異動
 
 **輪詢邏輯：**
+
 ```
 1. 呼叫 WesPort.pollAllTasks() 取得所有 WES 任務
 2. 對每個 WES 任務：
@@ -801,7 +899,6 @@ src/
                     │   │   │   └── MarkAsShippedCommand.java
                     │   │   └── eventhandler/
                     │   │       ├── NewOrderObservedEventHandler.java
-                    │   │       ├── OrderReadyForFulfillmentEventHandler.java
                     │   │       └── OrderFulfillmentFailedEventHandler.java
                     │   │
                     │   ├── domain/
@@ -851,11 +948,13 @@ src/
                     │   │   └── InventoryController.java
                     │   ├── application/
                     │   │   ├── InventoryApplicationService.java
-                    │   │   └── command/
-                    │   │       ├── CreateInboundTransactionCommand.java
-                    │   │       ├── CreateOutboundTransactionCommand.java
-                    │   │       ├── DetectDiscrepancyCommand.java
-                    │   │       └── ResolveDiscrepancyCommand.java
+                    │   │   ├── command/
+                    │   │   │   ├── CreateInboundTransactionCommand.java
+                    │   │   │   ├── CreateOutboundTransactionCommand.java
+                    │   │   │   ├── DetectDiscrepancyCommand.java
+                    │   │   │   └── ResolveDiscrepancyCommand.java
+                    │   │   └── eventhandler/
+                    │   │       ├── OrderReadyForFulfillmentEventHandler.java
                     │   ├── domain/
                     │   │   ├── model/
                     │   │   │   ├── InventoryTransaction.java
@@ -1010,169 +1109,690 @@ src/
 
 ## 🧭 **Command–Event Flow (跨 Context 互動圖)**
 
+本節展示完整的 Command、Event、Event Handler 跨 Context 互動流程，包含：
+
+- **排程履約流程** (Scheduled Fulfillment)
+- **WES 雙來源模型** (ORCHESTRATOR_SUBMITTED vs WES_DIRECT)
+- **完整庫存預約生命週期** (Reserve → Consume/Release)
+- **優先權管理**
+- **任務狀態同步與發現**
+
 ```mermaid
 flowchart TD
 
-%% ===== Order Context =====
-subgraph ORDER[Order Context]
-    OC1[CreateOrder Command]
-    OC2[ReserveInventory Command]
-    OC3[CommitInventory Command]
-    OC4[CreatePickingTask Command]
+%% ===== Observation Context =====
+subgraph OBS["👁️ Observation Context"]
+    direction TB
 
-    OE1[OrderCreated Event]
-    OE2[OrderReserved Event]
-    OE3[OrderCommitted Event]
-    OE4[OrderReadyForPickup Event]
-    OE5[OrderShipped Event]
+    %% Commands
+    OBS_CMD1[PollOrderSourceCommand]
+    OBS_CMD2[PollInventorySnapshotCommand]
+    OBS_CMD3[PollWesTaskStatusCommand]
+
+    %% Events
+    OBS_EVT1[NewOrderObservedEvent]
+    OBS_EVT2[InventorySnapshotObservedEvent]
+    OBS_EVT3[WesTaskDiscoveredEvent]
+    OBS_EVT4[WesTaskStatusUpdatedEvent]
+
+    %% Internal flows
+    OBS_CMD1 --> OBS_EVT1
+    OBS_CMD2 --> OBS_EVT2
+    OBS_CMD3 --> OBS_EVT3
+    OBS_CMD3 --> OBS_EVT4
 end
 
-%% ===== WES Context =====
-subgraph WES[WES Context]
-    WC1[CreatePickingTask Command]
-    WC2[UpdateTaskStatus Command]
+%% ===== Order Context =====
+subgraph ORD["📦 Order Context"]
+    direction TB
 
-    WE1[PickingTaskCreated Event]
-    WE2[PickingTaskCompleted Event]
-    WE3[PickingTaskFailed Event]
+    %% Event Handlers
+    ORD_EH1[NewOrderObservedEventHandler]
+    ORD_EH3[OrderFulfillmentFailedEventHandler]
+    ORD_EH4[InventoryReservedEventHandler]
+
+    %% Commands
+    ORD_CMD1[CreateOrderCommand]
+    ORD_CMD2[InitiateFulfillmentCommand]
+    ORD_CMD3[MoveToManualReviewCommand]
+    ORD_CMD4[MarkAsShippedCommand]
+
+    %% Events
+    ORD_EVT1[OrderCreatedEvent]
+    ORD_EVT2[OrderScheduledEvent]
+    ORD_EVT3[OrderReadyForFulfillmentEvent]
+    ORD_EVT4[OrderReservedEvent]
+    ORD_EVT5[OrderCommittedEvent]
+    ORD_EVT6[OrderShippedEvent]
+    ORD_EVT7[OrderFulfillmentFailedEvent]
+    ORD_EVT8[OrderMovedToManualReviewEvent]
+
+    %% Internal flows
+    ORD_EH1 --> ORD_CMD1
+    ORD_CMD1 --> ORD_EVT1
+    ORD_CMD1 --> ORD_EVT2
+    ORD_CMD1 --> ORD_EVT3
+    ORD_CMD2 --> ORD_EVT3
+    ORD_EH3 --> ORD_CMD3
+    ORD_CMD3 --> ORD_EVT8
+    ORD_CMD4 --> ORD_EVT6
+    ORD_EH4 --> ORD_EVT4
 end
 
 %% ===== Inventory Context =====
-subgraph INV[Inventory Context]
-    IC1[CreateInboundTransaction Command]
-    IC2[CreateOutboundTransaction Command]
-    IC3[ApplyAdjustment Command]
-    IC4[DetectDiscrepancy Command]
-    IC5[ResolveDiscrepancy Command]
+subgraph INV["🏬 Inventory Context"]
+    direction TB
 
-    IE1[InventoryIncreased Event]
-    IE2[InventoryDecreased Event]
-    IE3[InventoryTransactionCompleted Event]
-    IE4[InventoryDiscrepancyDetected Event]
-    IE5[InventoryAdjusted Event]
+    %% Event Handlers
+    INV_EH1[PickingTaskCompletedEventHandler]
+    INV_EH2[PutawayTaskCompletedEventHandler]
+    INV_EH3[InventorySnapshotObservedEventHandler]
+    INV_EH4[OrderReadyForFulfillmentEventHandler]
+
+    %% Commands
+    INV_CMD1[ReserveInventoryCommand]
+    INV_CMD2[ConsumeReservationCommand]
+    INV_CMD3[ReleaseReservationCommand]
+    INV_CMD4[CreateOutboundTransactionCommand]
+    INV_CMD5[CreateInboundTransactionCommand]
+    INV_CMD6[DetectDiscrepancyCommand]
+    INV_CMD7[ResolveDiscrepancyCommand]
+    INV_CMD8[ApplyAdjustmentCommand]
+
+    %% Events
+    INV_EVT1[InventoryReservedEvent]
+    INV_EVT2[ReservationFailedEvent]
+    INV_EVT3[ReservationConsumedEvent]
+    INV_EVT4[ReservationReleasedEvent]
+    INV_EVT5[InventoryDecreasedEvent]
+    INV_EVT6[InventoryIncreasedEvent]
+    INV_EVT7[InventoryDiscrepancyDetectedEvent]
+    INV_EVT8[InventoryAdjustedEvent]
+    INV_EVT9[InventoryTransactionCompletedEvent]
+
+    %% Internal flows
+    INV_EH1 --> INV_CMD4
+    INV_EH2 --> INV_CMD5
+    INV_EH3 --> INV_CMD6
+    INV_EH4 --> INV_CMD1
+
+    INV_CMD1 --> INV_EVT1
+    INV_CMD1 --> INV_EVT2
+    INV_CMD2 --> INV_EVT3
+    INV_CMD3 --> INV_EVT4
+    INV_CMD4 --> INV_EVT5
+    INV_CMD5 --> INV_EVT6
+    INV_CMD6 --> INV_EVT7
+    INV_CMD7 --> INV_EVT8
+    INV_CMD8 --> INV_EVT8
+    INV_EVT5 --> INV_EVT9
+    INV_EVT6 --> INV_EVT9
 end
 
-%% ===== Observation Context =====
-subgraph OBS[Observation Context]
-    OB1[PollOrderSource Command]
-    OB2[PollInventorySnapshot Command]
-    OB3[PollWesTaskStatus Command]
+%% ===== WES Context =====
+subgraph WES["🏭 WES Context"]
+    direction TB
 
-    OBE1[NewOrderObserved Event]
-    OBE2[InventorySnapshotObserved Event]
-    OBE3[WesTaskStatusUpdated Event]
+    %% Event Handlers
+    WES_EH1[OrderReservedEventHandler]
+    WES_EH2[WesTaskDiscoveredEventHandler]
+    WES_EH3[WesTaskStatusUpdatedEventHandler]
+
+    %% Commands - Picking
+    WES_CMD1[CreatePickingTaskForOrderCommand<br/>ORCHESTRATOR_SUBMITTED]
+    WES_CMD2[CreatePickingTaskFromWesCommand<br/>WES_DIRECT]
+    WES_CMD3[SubmitPickingTaskToWesCommand]
+    WES_CMD4[MarkTaskCompletedCommand]
+    WES_CMD5[MarkTaskFailedCommand]
+    WES_CMD6[AdjustTaskPriorityCommand]
+    WES_CMD7[AdjustOrderPriorityCommand]
+    WES_CMD8[CancelTaskCommand]
+
+    %% Commands - Putaway
+    WES_CMD9[CreatePutawayTaskForReturnCommand<br/>ORCHESTRATOR_SUBMITTED]
+    WES_CMD10[CreatePutawayTaskFromWesCommand<br/>WES_DIRECT]
+    WES_CMD11[SubmitPutawayTaskToWesCommand]
+
+    %% Events - Picking
+    WES_EVT1[PickingTaskCreatedEvent]
+    WES_EVT2[PickingTaskSubmittedEvent]
+    WES_EVT3[PickingTaskCompletedEvent]
+    WES_EVT4[PickingTaskFailedEvent]
+    WES_EVT5[PickingTaskCanceledEvent]
+    WES_EVT6[PickingTaskPriorityAdjustedEvent]
+
+    %% Events - Putaway
+    WES_EVT7[PutawayTaskCreatedEvent]
+    WES_EVT8[PutawayTaskSubmittedEvent]
+    WES_EVT9[PutawayTaskCompletedEvent]
+    WES_EVT10[PutawayTaskFailedEvent]
+    WES_EVT11[PutawayTaskPriorityAdjustedEvent]
+
+    %% Internal flows
+    WES_EH1 --> WES_CMD1
+    WES_EH2 --> WES_CMD2
+    WES_EH2 --> WES_CMD10
+    WES_EH3 --> WES_CMD4
+    WES_EH3 --> WES_CMD5
+
+    WES_CMD1 --> WES_EVT1
+    WES_CMD2 --> WES_EVT1
+    WES_CMD3 --> WES_EVT2
+    WES_CMD4 --> WES_EVT3
+    WES_CMD5 --> WES_EVT4
+    WES_CMD6 --> WES_EVT6
+    WES_CMD8 --> WES_EVT5
+
+    WES_CMD9 --> WES_EVT7
+    WES_CMD10 --> WES_EVT7
+    WES_CMD11 --> WES_EVT8
 end
 
-%% ===== Shared: Audit Logging =====
-subgraph AUDIT[Audit Logging Shared Context]
-    AL[AuditLogSubscriber]
+%% ===== Audit Logging =====
+subgraph AUDIT["📋 Audit Logging (Shared Context)"]
+    direction TB
+    AUDIT_SUB[AuditLogSubscriber<br/>訂閱所有 Domain Events]
 end
 
-%% ========== Flow Relations ==========
+%% ========================================
+%% CROSS-CONTEXT EVENT FLOWS
+%% ========================================
 
-%% Observation -> Order
-OB1 --> OBE1
-OBE1 --> OC1
+%% 1. Observation → Order: 新訂單偵測
+OBS_EVT1 -.->|event| ORD_EH1
 
-%% Order internal flow
-OC1 --> OE1 --> OC2
-OC2 --> OE2 --> IC2
-OC3 --> OE3 --> WC1
-OC4 --> OE4 --> WC1
-OE5 --> AL
+%% 2. Order → Inventory: 履約流程 - 預約庫存 (Event-Driven)
+ORD_EVT3 -.->|event| INV_EH4 
 
-%% WES flow
-WC1 --> WE1
-WE1 --> AL
-WC2 --> WE2
-WE2 --> IC2
-WE3 --> AL
+%% 3. Inventory → Order: 預約結果
+INV_EVT1 -.->|event| ORD_EH4
+INV_EVT2 -.->|event| ORD_EVT7
 
-%% Inventory flow
-IC1 --> IE1 --> IE3
-IC2 --> IE2 --> IE3
-IC3 --> IE5 --> AL
-IC4 --> IE4 --> IC5
-IC5 --> IE5 --> AL
+%% 4. Order → WES: 建立揀貨任務
+ORD_EVT4 -.->|event| WES_EH1
 
-%% Observation - Inventory
-OB2 --> OBE2 --> IC4
-OB3 --> OBE3 --> WC2
+%% 5. WES → Inventory: 任務完成觸發庫存異動
+WES_EVT3 -.->|event| INV_EH1
+WES_EVT9 -.->|event| INV_EH2
 
-%% Event Logging
-OE1 --> AL
-OE2 --> AL
-OE3 --> AL
-OE4 --> AL
-WE1 --> AL
-WE2 --> AL
-WE3 --> AL
-IE1 --> AL
-IE2 --> AL
-IE3 --> AL
-IE4 --> AL
-IE5 --> AL
-OBE1 --> AL
-OBE2 --> AL
-OBE3 --> AL
+%% 6. Inventory → Order: 庫存扣減完成
+INV_EVT3 -.->|event| ORD_EVT5
+
+%% 7. Observation → WES: 任務發現與狀態同步
+OBS_EVT3 -.->|event| WES_EH2
+OBS_EVT4 -.->|event| WES_EH3
+
+%% 8. Observation → Inventory: 庫存差異偵測
+OBS_EVT2 -.->|event| INV_EH3
+
+%% 9. Scheduled Fulfillment Flow (Infrastructure-driven)
+SCHEDULER -->|呼叫 Application Service| ORD_CMD2
+ORD_CMD2 --> ORD_EVT3
+ORD_EVT7 -.->|event| ORD_EH3
+
+%% 10. All Events → Audit Logging
+OBS_EVT1 -.->|event| AUDIT_SUB
+OBS_EVT2 -.->|event| AUDIT_SUB
+OBS_EVT3 -.->|event| AUDIT_SUB
+OBS_EVT4 -.->|event| AUDIT_SUB
+
+ORD_EVT1 -.->|event| AUDIT_SUB
+ORD_EVT2 -.->|event| AUDIT_SUB
+ORD_EVT3 -.->|event| AUDIT_SUB
+ORD_EVT4 -.->|event| AUDIT_SUB
+ORD_EVT5 -.->|event| AUDIT_SUB
+ORD_EVT6 -.->|event| AUDIT_SUB
+ORD_EVT7 -.->|event| AUDIT_SUB
+ORD_EVT8 -.->|event| AUDIT_SUB
+
+INV_EVT1 -.->|event| AUDIT_SUB
+INV_EVT2 -.->|event| AUDIT_SUB
+INV_EVT3 -.->|event| AUDIT_SUB
+INV_EVT4 -.->|event| AUDIT_SUB
+INV_EVT5 -.->|event| AUDIT_SUB
+INV_EVT6 -.->|event| AUDIT_SUB
+INV_EVT7 -.->|event| AUDIT_SUB
+INV_EVT8 -.->|event| AUDIT_SUB
+INV_EVT9 -.->|event| AUDIT_SUB
+
+WES_EVT1 -.->|event| AUDIT_SUB
+WES_EVT2 -.->|event| AUDIT_SUB
+WES_EVT3 -.->|event| AUDIT_SUB
+WES_EVT4 -.->|event| AUDIT_SUB
+WES_EVT5 -.->|event| AUDIT_SUB
+WES_EVT6 -.->|event| AUDIT_SUB
+WES_EVT7 -.->|event| AUDIT_SUB
+WES_EVT8 -.->|event| AUDIT_SUB
+WES_EVT9 -.->|event| AUDIT_SUB
+WES_EVT10 -.->|event| AUDIT_SUB
+WES_EVT11 -.->|event| AUDIT_SUB
+
+%% Styling
+classDef commandStyle fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+classDef eventStyle fill:#FFF3E0,stroke:#F57C00,stroke-width:2px
+classDef handlerStyle fill:#E8F5E9,stroke:#388E3C,stroke-width:2px
+classDef auditStyle fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
+
+class OBS_CMD1,OBS_CMD2,OBS_CMD3,ORD_CMD1,ORD_CMD2,ORD_CMD3,ORD_CMD4,INV_CMD1,INV_CMD2,INV_CMD3,INV_CMD4,INV_CMD5,INV_CMD6,INV_CMD7,INV_CMD8,WES_CMD1,WES_CMD2,WES_CMD3,WES_CMD4,WES_CMD5,WES_CMD6,WES_CMD7,WES_CMD8,WES_CMD9,WES_CMD10,WES_CMD11 commandStyle
+
+class OBS_EVT1,OBS_EVT2,OBS_EVT3,OBS_EVT4,ORD_EVT1,ORD_EVT2,ORD_EVT3,ORD_EVT4,ORD_EVT5,ORD_EVT6,ORD_EVT7,ORD_EVT8,INV_EVT1,INV_EVT2,INV_EVT3,INV_EVT4,INV_EVT5,INV_EVT6,INV_EVT7,INV_EVT8,INV_EVT9,WES_EVT1,WES_EVT2,WES_EVT3,WES_EVT4,WES_EVT5,WES_EVT6,WES_EVT7,WES_EVT8,WES_EVT9,WES_EVT10,WES_EVT11 eventStyle
+
+class ORD_EH1,ORD_EH3,ORD_EH4,INV_EH1,INV_EH2,INV_EH3,INV_EH4,WES_EH1,WES_EH2,WES_EH3 handlerStyle
+
+class AUDIT_SUB auditStyle
 ```
 
---
+---
 
-### 🟦 1. Observation Context
+## 🔄 詳細流程說明
 
-- 定期輪詢上游資料源（例如 ERP / WES / WMS）。
-- 當偵測到新訂單或庫存異常，觸發對應事件：
+### 🟦 1. Observation Context（觀察者 Context）
 
-  - `NewOrderObserved` → 觸發 `CreateOrder`
-  - `InventorySnapshotObserved` → 觸發 `DetectDiscrepancy`
-  - `WesTaskStatusUpdated` → 觸發 `UpdateTaskStatus`
+**責任：** 定期輪詢外部系統，發現新訂單、庫存差異、WES 任務狀態變更
+
+#### 1.1 訂單觀察流程
+
+```
+PollOrderSourceCommand (透過 OrderSourcePort 查詢外部資料庫)
+  → NewOrderObservedEvent (包含完整訂單資料)
+  → NewOrderObservedEventHandler (Order Context)
+  → CreateOrderCommand
+```
+
+#### 1.2 庫存觀察流程
+
+```
+PollInventorySnapshotCommand
+  → InventorySnapshotObservedEvent
+  → InventorySnapshotObservedEventHandler (Inventory Context)
+  → DetectDiscrepancyCommand
+```
+
+#### 1.3 WES 任務觀察流程（雙功能）
+
+**功能 A: 任務發現 (Task Discovery)**
+
+- 偵測 WES 系統中直接建立的任務 (WES_DIRECT)
+
+```
+PollWesTaskStatusCommand
+  → WesTaskDiscoveredEvent (發現新的 WES_DIRECT 任務)
+  → WesTaskDiscoveredEventHandler (WES Context)
+  → CreatePickingTaskFromWesCommand / CreatePutawayTaskFromWesCommand
+```
+
+**功能 B: 狀態同步 (Status Sync)**
+
+- 同步所有任務狀態（包含 ORCHESTRATOR_SUBMITTED 與 WES_DIRECT）
+
+```
+PollWesTaskStatusCommand
+  → WesTaskStatusUpdatedEvent
+  → WesTaskStatusUpdatedEventHandler (WES Context)
+  → MarkTaskCompletedCommand / MarkTaskFailedCommand
+```
 
 ---
 
-### 🟧 2. Order Context
+### 🟧 2. Order Context（訂單 Context）
 
-- 收到 `NewOrderObserved` 後建立 `Order`。
-- 預約庫存 (`ReserveInventory`) → 由 Inventory Context 執行。
-- 出貨完成後 (`OrderCommitted`、`OrderShipped`) 通知 Audit Logging。
+**責任：** 管理訂單生命週期，包含排程履約、庫存預約、出貨流程
+
+#### 2.1 訂單建立流程
+
+```
+NewOrderObservedEvent
+  → NewOrderObservedEventHandler
+  → CreateOrderCommand
+  → OrderCreatedEvent (立即履約訂單)
+  → OrderScheduledEvent (排程履約訂單，含 scheduledPickupTime)
+```
+
+#### 2.2 排程履約流程（Scheduled Fulfillment）
+
+```
+OrderScheduledEvent (訂單已排程)
+  ↓
+FulfillmentScheduler (Infrastructure Layer - 定期檢查 SCHEDULED 訂單，時間窗口到達時)
+  ↓
+OrderApplicationService.initiateFulfillment()
+  ↓
+InitiateFulfillmentCommand
+  ↓
+Order.markReadyForFulfillment() (Domain Logic)
+  ↓
+OrderReadyForFulfillmentEvent
+  ↓
+OrderReadyForFulfillmentEventHandler (Inventory Context - Event Handler)
+  ↓
+ReserveInventoryCommand
+  ↓
+InventoryApplicationService.reserveInventory()
+```
+
+#### 2.3 庫存預約成功路徑
+
+```
+InventoryReservedEvent
+  → InventoryReservedEventHandler (Order Context)
+  → OrderReservedEvent
+  → OrderReservedEventHandler (WES Context)
+  → CreatePickingTaskForOrderCommand (origin: ORCHESTRATOR_SUBMITTED)
+```
+
+#### 2.4 庫存預約失敗路徑（人工審核）
+
+```
+ReservationFailedEvent
+  → OrderFulfillmentFailedEvent
+  → OrderFulfillmentFailedEventHandler
+  → MoveToManualReviewCommand
+  → OrderMovedToManualReviewEvent
+  → 建立 OrderManualReview 人工審核單
+```
+
+#### 2.5 出貨完成流程
+
+```
+ReservationConsumedEvent (Inventory Context)
+  → OrderCommittedEvent
+  → MarkAsShippedCommand
+  → OrderShippedEvent
+```
+
+**Event Handler 說明：**
+
+- `NewOrderObservedEventHandler` (Order Context): 接收外部訂單事件，建立 Order Aggregate
+- `OrderReadyForFulfillmentEventHandler` (Inventory Context): 監聽 OrderReadyForFulfillmentEvent，觸發 ReserveInventoryCommand 預約庫存
+- `OrderFulfillmentFailedEventHandler` (Order Context): 處理履約失敗，移至人工審核佇列
+- `InventoryReservedEventHandler` (Order Context): 處理預約成功，更新訂單狀態
 
 ---
 
-### 🟨 3. WES Context
+### 🟨 3. WES Context（倉儲執行 Context）
 
-- `CreatePickingTask` 由 Order Context 觸發。
-- 任務完成 (`PickingTaskCompleted`) 後，觸發 Inventory 出庫 (`CreateOutboundTransaction`)。
-- 任務異常 (`PickingTaskFailed`) 則回報 Audit。
+**責任：** 管理揀貨與上架任務，支援雙來源模型（ORCHESTRATOR_SUBMITTED / WES_DIRECT）
+
+#### 3.1 揀貨任務建立流程（ORCHESTRATOR_SUBMITTED）
+
+```
+OrderReservedEvent (Order Context)
+  → OrderReservedEventHandler
+  → CreatePickingTaskForOrderCommand (origin: ORCHESTRATOR_SUBMITTED, orderId 有值)
+  → PickingTaskCreatedEvent
+  → SubmitPickingTaskToWesCommand (透過 WesPort 提交至 WES 系統)
+  → PickingTaskSubmittedEvent (取得 wesTaskId)
+```
+
+#### 3.2 揀貨任務發現流程（WES_DIRECT）
+
+```
+WesTaskDiscoveredEvent (Observation Context)
+  → WesTaskDiscoveredEventHandler
+  → CreatePickingTaskFromWesCommand (origin: WES_DIRECT, orderId 為 null)
+  → PickingTaskCreatedEvent
+```
+
+#### 3.3 上架任務建立流程（ORCHESTRATOR_SUBMITTED）
+
+```
+ReturnInitiatedEvent / ReceivingInitiatedEvent
+  → CreatePutawayTaskForReturnCommand (origin: ORCHESTRATOR_SUBMITTED)
+  → PutawayTaskCreatedEvent
+  → SubmitPutawayTaskToWesCommand
+  → PutawayTaskSubmittedEvent
+```
+
+#### 3.4 上架任務發現流程（WES_DIRECT）
+
+```
+WesTaskDiscoveredEvent (Observation Context)
+  → WesTaskDiscoveredEventHandler
+  → CreatePutawayTaskFromWesCommand (origin: WES_DIRECT, sourceId 為 null)
+  → PutawayTaskCreatedEvent
+```
+
+#### 3.5 任務完成流程
+
+```
+WesTaskStatusUpdatedEvent (Observation Context)
+  → WesTaskStatusUpdatedEventHandler
+  → MarkTaskCompletedCommand
+  → PickingTaskCompletedEvent / PutawayTaskCompletedEvent
+  → 觸發 Inventory Context 庫存異動
+```
+
+#### 3.6 優先權管理流程
+
+**單一任務優先權調整：**
+
+```
+AdjustTaskPriorityCommand (taskId, newPriority)
+  → PickingTaskPriorityAdjustedEvent / PutawayTaskPriorityAdjustedEvent
+  → 透過 WesPort 更新 WES 系統優先權
+```
+
+**訂單批次優先權調整：**
+
+```
+AdjustOrderPriorityCommand (orderId, newPriority, taskIds?)
+  → 查詢所有 orderId 相關的 PickingTask
+  → 批次調整所有任務優先權
+  → 批次發佈 PickingTaskPriorityAdjustedEvent
+```
+
+#### 3.7 任務取消流程
+
+```
+CancelTaskCommand (taskId, reason)
+  → PickingTaskCanceledEvent
+  → 透過 WesPort 取消 WES 任務
+  → ReleaseReservationCommand (Inventory Context，釋放已預約庫存)
+```
+
+**Event Handler 說明：**
+
+- `OrderReservedEventHandler`: 訂單預約成功後建立揀貨任務
+- `WesTaskDiscoveredEventHandler`: WesObserver 發現新 WES_DIRECT 任務，建立對應 Aggregate
+- `WesTaskStatusUpdatedEventHandler`: 同步 WES 任務狀態，標記完成/失敗
 
 ---
 
-### 🟩 4. Inventory Context
+### 🟩 4. Inventory Context（庫存 Context）
 
-- `InventoryTransaction` 處理所有入庫、出庫交易。
-- `InventoryAdjustment` 處理庫存差異。
-- `ReturnTask` 處理回庫與退貨。
-- 所有異動事件（Increased / Decreased / Adjusted）皆被 Audit 記錄。
+**責任：** 管理庫存預約、消耗、釋放、交易、差異偵測與修正
+
+#### 4.1 庫存預約生命週期
+
+**A. 預約階段 (Reserve)**
+
+```
+ReserveInventoryCommand (orderId, sku, warehouseId, qty)
+  → 呼叫外部 Inventory System API
+  → InventoryReservedEvent (預約成功)
+  → ReservationFailedEvent (預約失敗：庫存不足、系統錯誤等)
+```
+
+**B. 消耗階段 (Consume)**
+
+```
+PickingTaskCompletedEvent (WES Context)
+  → PickingTaskCompletedEventHandler
+  → ConsumeReservationCommand (reservationId)
+  → CreateOutboundTransactionCommand (type: OUTBOUND)
+  → InventoryDecreasedEvent
+  → ReservationConsumedEvent
+  → InventoryTransactionCompletedEvent
+```
+
+**C. 釋放階段 (Release)**
+
+```
+PickingTaskCanceledEvent / OrderCanceledEvent
+  → ReleaseReservationCommand (reservationId)
+  → ReservationReleasedEvent
+```
+
+#### 4.2 入庫交易流程
+
+```
+PutawayTaskCompletedEvent (WES Context)
+  → PutawayTaskCompletedEventHandler
+  → CreateInboundTransactionCommand (type: INBOUND)
+  → InventoryIncreasedEvent
+  → InventoryTransactionCompletedEvent
+```
+
+#### 4.3 庫存差異偵測與修正流程
+
+```
+InventorySnapshotObservedEvent (Observation Context)
+  → InventorySnapshotObservedEventHandler
+  → DetectDiscrepancyCommand (snapshotA: Internal, snapshotB: WES)
+  → InventoryDiscrepancyDetectedEvent (若發現差異)
+  → ResolveDiscrepancyCommand (人工或自動處理)
+  → ApplyAdjustmentCommand
+  → InventoryAdjustedEvent
+  → CreateInboundTransaction / CreateOutboundTransaction (校正庫存)
+```
+
+**Event Handler 說明：**
+
+- `PickingTaskCompletedEventHandler`: 揀貨完成後消耗預約，建立出庫交易
+- `PutawayTaskCompletedEventHandler`: 上架完成後建立入庫交易
+- `InventorySnapshotObservedEventHandler`: 偵測內外部庫存差異
 
 ---
 
-### 🟪 5. Audit Logging
+### 🟪 5. Audit Logging（審計日誌 Shared Context）
 
-- 為 **全域訂閱者 (Event Subscriber)**。
-- 訂閱所有 `DomainEvent`。
-- 記錄：
+**責任：** 全域事件訂閱，記錄所有 Domain Event
 
-  - Aggregate ID
-  - Command / Event Type
-  - Timestamp
-  - Payload（含來源 Context）
+#### 特性
 
-## ⚙️ 延伸建議
+- **Event Subscriber Pattern**: 訂閱所有 Context 的 Domain Events
+- **非侵入式設計**: 各 Context 無需依賴 Audit，透過 Event Bus 自動記錄
+- **非同步處理**: 使用 async 模式，不影響主流程性能
+- **完整追蹤**: 記錄 Aggregate ID、Event Type、Timestamp、Payload、Context 來源
 
-若要實作此事件流：
+#### 記錄內容
 
-- 使用 **Event Bus（例如 Spring ApplicationEventPublisher / Kafka）**。
-- 各 Context 不直接依賴彼此，而是透過事件通訊。
-- `AuditLogSubscriber` 可以 async 模式記錄，不影響主流程性能。
+```
+AuditRecord {
+  recordId: UUID
+  aggregateType: "Order" | "PickingTask" | "InventoryTransaction" | ...
+  aggregateId: String
+  eventName: "OrderCreatedEvent" | "PickingTaskCompletedEvent" | ...
+  eventTimestamp: LocalDateTime
+  eventMetadata: {
+    context: "Order Context" | "WES Context" | ...
+    correlationId: UUID (跨 Context 追蹤)
+    triggerSource: "NewOrderObservedEvent" | "Manual" | ...
+  }
+  payload: JSON
+}
+```
+
+---
+
+## 📊 關鍵設計模式總結
+
+### 1. **Event-Driven Architecture (事件驅動架構)**
+
+- 各 Context 透過 Domain Events 通訊，降低耦合
+- Event Handler 作為中介層，將事件轉換為 Command
+
+### 2. **Dual-Origin Model (雙來源模型)**
+
+- **WES Context** 支援兩種任務來源：
+  - `ORCHESTRATOR_SUBMITTED`: Orchestrator 為訂單建立的任務
+  - `WES_DIRECT`: 使用者直接在 WES 系統建立的任務
+- **WesObserver** 確保所有 WES 任務都被納入管理，維持庫存一致性
+
+### 3. **Scheduled Fulfillment (排程履約)**
+
+- **FulfillmentScheduler** 定期檢查 `SCHEDULED` 狀態訂單
+- 依據 `scheduledPickupTime - fulfillmentLeadTime` 計算履約窗口
+- 時間到達時自動觸發 `OrderReadyForFulfillmentEvent`
+
+### 4. **Reservation Lifecycle (預約生命週期)**
+
+- **Reserve**: 鎖定庫存（訂單建立時）
+- **Consume**: 消耗預約（揀貨完成時，實際扣減庫存）
+- **Release**: 釋放預約（訂單取消時，解除鎖定）
+- 避免過早扣減庫存，提升庫存利用率
+
+### 5. **Anti-Corruption Layer (防腐層)**
+
+- **WesPort**: 隔離 WES 系統，Domain Model 不直接依賴外部 API
+- **OrderSourcePort**: 隔離外部訂單系統資料庫
+- 確保領域模型純淨，外部系統變更不影響核心邏輯
+
+### 6. **Observer Pattern (觀察者模式)**
+
+- **OrderObserver**: 輪詢外部訂單系統
+- **InventoryObserver**: 輪詢庫存差異
+- **WesObserver**: 輪詢 WES 任務狀態，兼具任務發現與狀態同步功能
+
+---
+
+## ⚙️ 技術實作建議
+
+### 1. Event Bus 選擇
+
+- **同步事件**: Spring `ApplicationEventPublisher` (Context 內部事件)
+- **非同步事件**: Kafka / RabbitMQ (跨 Context 事件、Audit Logging)
+
+### 2. Event Handler 註冊
+
+```java
+@Component
+public class NewOrderObservedEventHandler {
+    @EventListener
+    @Async
+    public void handle(NewOrderObservedEvent event) {
+        orderApplicationService.createOrder(new CreateOrderCommand(event.getObservationResult()));
+    }
+}
+```
+
+### 3. Audit Logging 訂閱
+
+```java
+@Component
+public class AuditLogSubscriber {
+    @EventListener
+    @Async
+    public void onAnyDomainEvent(DomainEvent event) {
+        auditService.recordAuditLog(event);
+    }
+}
+```
+
+### 4. 分散式鎖（Scheduler）
+
+```java
+@Scheduled(cron = "0 * * * * *") // 每分鐘執行
+@SchedulerLock(name = "FulfillmentScheduler", lockAtMostFor = "50s", lockAtLeastFor = "10s")
+public void checkReadyForFulfillment() {
+    // 查詢 SCHEDULED 訂單，檢查履約窗口...
+}
+```
+
+### 5. 冪等性保證
+
+- Command 層加入 idempotency key 檢查
+- Event Handler 使用 `@Transactional` + unique constraint 防止重複處理
+
+---
+
+## 🔗 延伸閱讀
+
+若要深入理解各 Context 的詳細設計，請參閱：
+
+- **戰術實作層（Tactical Implementation Layer）**: 檔案結構、Command/Event 類別定義
+- **Aggregate Command & Domain Event 定義**: 各 Context 的完整 API
+- **領域模型結構圖（Domain Model Structure Diagram）**: Aggregate、Entity、Value Object 關係
 
 --
 
