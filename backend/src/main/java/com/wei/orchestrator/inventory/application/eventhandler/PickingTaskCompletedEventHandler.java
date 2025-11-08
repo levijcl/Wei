@@ -10,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class PickingTaskCompletedEventHandler {
@@ -28,6 +30,7 @@ public class PickingTaskCompletedEventHandler {
     }
 
     @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handlePickingTaskCompleted(PickingTaskCompletedEvent event) {
         logger.info("Handling picking task completed event for task: {}", event.getTaskId());
 
