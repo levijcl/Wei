@@ -2,6 +2,7 @@ package com.wei.orchestrator.inventory.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.command.ConsumeReservationCommand;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
@@ -59,26 +60,25 @@ public class PickingTaskCompletedEventHandler {
             return;
         }
 
-        try {
-            ConsumeReservationCommand command =
-                    new ConsumeReservationCommand(
-                            reservationTransaction.getTransactionId(),
-                            reservationTransaction.getExternalReservationId().getValue(),
-                            event.getOrderId());
+        ConsumeReservationCommand command =
+                new ConsumeReservationCommand(
+                        reservationTransaction.getTransactionId(),
+                        reservationTransaction.getExternalReservationId().getValue(),
+                        event.getOrderId());
 
-            inventoryApplicationService.consumeReservation(command);
+        InventoryOperationResultDto result = inventoryApplicationService.consumeReservation(command);
 
+        if (result.isSuccess()) {
             logger.info(
                     "Successfully consumed reservation for order: {} after picking task: {}",
                     event.getOrderId(),
                     event.getTaskId());
-
-        } catch (Exception e) {
+        } else {
             logger.error(
-                    "Failed to consume reservation for order: {} after picking task: {}",
+                    "Failed to consume reservation for order: {} after picking task: {}, error: {}",
                     event.getOrderId(),
                     event.getTaskId(),
-                    e);
+                    result.getErrorMessage());
         }
     }
 }

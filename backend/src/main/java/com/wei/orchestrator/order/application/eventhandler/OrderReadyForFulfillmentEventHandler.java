@@ -2,6 +2,7 @@ package com.wei.orchestrator.order.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.command.ReserveInventoryCommand;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
@@ -52,9 +53,23 @@ public class OrderReadyForFulfillmentEventHandler {
             ReserveInventoryCommand command =
                     new ReserveInventoryCommand(
                             orderId, item.getSku(), "DEFAULT_WAREHOUSE", item.getQuantity());
-            inventoryApplicationService.reserveInventory(command);
+            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+
+            if (!result.isSuccess()) {
+                logger.error(
+                        "Failed to reserve inventory for order: {}, SKU: {}, error: {}",
+                        orderId,
+                        item.getSku(),
+                        result.getErrorMessage());
+            } else {
+                logger.info(
+                        "Successfully reserved inventory for order: {}, SKU: {}, transactionId: {}",
+                        orderId,
+                        item.getSku(),
+                        result.getTransactionId());
+            }
         }
 
-        logger.info("Successfully initiated inventory reservation for order: {}", orderId);
+        logger.info("Completed inventory reservation process for order: {}", orderId);
     }
 }

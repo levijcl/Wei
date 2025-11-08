@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.command.*;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.inventory.domain.exception.InsufficientInventoryException;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
@@ -53,9 +54,10 @@ class InventoryApplicationServiceTest {
             when(inventoryPort.createReservation("SKU-001", "WH-01", "ORDER-001", 10))
                     .thenReturn(externalId);
 
-            String transactionId = inventoryApplicationService.reserveInventory(command);
+            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
 
-            assertNotNull(transactionId);
+            assertTrue(result.isSuccess());
+            assertNotNull(result.getTransactionId());
             verify(inventoryPort).createReservation("SKU-001", "WH-01", "ORDER-001", 10);
             verify(inventoryTransactionRepository, atLeast(2))
                     .save(any(InventoryTransaction.class));
@@ -72,9 +74,11 @@ class InventoryApplicationServiceTest {
             when(inventoryPort.createReservation("SKU-002", "WH-01", "ORDER-002", 50))
                     .thenThrow(new InsufficientInventoryException("Insufficient inventory"));
 
-            assertThrows(
-                    InsufficientInventoryException.class,
-                    () -> inventoryApplicationService.reserveInventory(command));
+            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+
+            assertFalse(result.isSuccess());
+            assertNotNull(result.getErrorMessage());
+            assertTrue(result.getErrorMessage().contains("Insufficient inventory"));
 
             verify(inventoryPort).createReservation("SKU-002", "WH-01", "ORDER-002", 50);
             verify(inventoryTransactionRepository, atLeast(2))
@@ -162,9 +166,11 @@ class InventoryApplicationServiceTest {
             when(inventoryTransactionRepository.save(any(InventoryTransaction.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            String transactionId = inventoryApplicationService.increaseInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.increaseInventory(command);
 
-            assertNotNull(transactionId);
+            assertTrue(result.isSuccess());
+            assertNotNull(result.getTransactionId());
             verify(inventoryPort).increaseInventory("SKU-004", "WH-01", 20, "Putaway completed");
             verify(inventoryTransactionRepository, atLeast(2))
                     .save(any(InventoryTransaction.class));
@@ -183,9 +189,12 @@ class InventoryApplicationServiceTest {
                     .when(inventoryPort)
                     .increaseInventory(anyString(), anyString(), anyInt(), anyString());
 
-            assertThrows(
-                    RuntimeException.class,
-                    () -> inventoryApplicationService.increaseInventory(command));
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.increaseInventory(command);
+
+            assertFalse(result.isSuccess());
+            assertNotNull(result.getErrorMessage());
+            assertTrue(result.getErrorMessage().contains("External system error"));
 
             verify(inventoryPort).increaseInventory("SKU-006", "WH-01", 25, "Putaway completed");
             verify(inventoryTransactionRepository, atLeast(2))
@@ -204,9 +213,10 @@ class InventoryApplicationServiceTest {
             when(inventoryTransactionRepository.save(any(InventoryTransaction.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            String transactionId = inventoryApplicationService.adjustInventory(command);
+            InventoryOperationResultDto result = inventoryApplicationService.adjustInventory(command);
 
-            assertNotNull(transactionId);
+            assertTrue(result.isSuccess());
+            assertNotNull(result.getTransactionId());
             verify(inventoryPort).adjustInventory("SKU-005", "WH-01", -3, "Damaged goods");
             verify(inventoryTransactionRepository, atLeast(2))
                     .save(any(InventoryTransaction.class));

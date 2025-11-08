@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.command.ReserveInventoryCommand;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.order.application.eventhandler.OrderReadyForFulfillmentEventHandler;
 import com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent;
 import com.wei.orchestrator.order.domain.model.Order;
@@ -42,6 +43,8 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createMockOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             eventHandler.handleOrderReadyForFulfillment(event);
 
@@ -56,6 +59,8 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createMockOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             ArgumentCaptor<ReserveInventoryCommand> commandCaptor =
                     ArgumentCaptor.forClass(ReserveInventoryCommand.class);
@@ -128,6 +133,8 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createSingleItemOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             eventHandler.handleOrderReadyForFulfillment(event);
 
@@ -142,6 +149,8 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createMultiItemOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             eventHandler.handleOrderReadyForFulfillment(event);
 

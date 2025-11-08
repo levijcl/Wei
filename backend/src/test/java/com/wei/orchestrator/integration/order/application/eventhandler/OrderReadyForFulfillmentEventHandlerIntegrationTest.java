@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
@@ -49,7 +50,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
         @Test
         void shouldHandleOrderReadyForFulfillmentEvent() {
-            when(inventoryApplicationService.reserveInventory(any())).thenReturn("reservation-1");
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -72,7 +74,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
         @Test
         void shouldReserveInventoryForOrderLineItems() {
-            when(inventoryApplicationService.reserveInventory(any())).thenReturn("reservation-1");
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -96,7 +99,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
         @Test
         void shouldDirectlyInvokeHandlerMethod() {
-            when(inventoryApplicationService.reserveInventory(any())).thenReturn("reservation-1");
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -139,7 +143,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
         @Test
         void shouldHandleEventWhenInitiateFulfillmentIsCalled() {
-            when(inventoryApplicationService.reserveInventory(any())).thenReturn("reservation-1");
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -202,7 +207,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
         @Test
         void shouldCommitBothTransactionsWhenHandlerSucceeds() {
-            when(inventoryApplicationService.reserveInventory(any())).thenReturn("reservation-1");
+            when(inventoryApplicationService.reserveInventory(any()))
+                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             String orderId = "SUCCESS-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
