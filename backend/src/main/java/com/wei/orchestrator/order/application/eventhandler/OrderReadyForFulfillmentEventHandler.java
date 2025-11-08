@@ -52,8 +52,9 @@ public class OrderReadyForFulfillmentEventHandler {
         for (OrderLineItem item : lineItems) {
             ReserveInventoryCommand command =
                     new ReserveInventoryCommand(
-                            orderId, item.getSku(), "DEFAULT_WAREHOUSE", item.getQuantity());
-            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+                            orderId, item.getSku(), "WH001", item.getQuantity());
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.reserveInventory(command);
 
             if (!result.isSuccess()) {
                 logger.error(

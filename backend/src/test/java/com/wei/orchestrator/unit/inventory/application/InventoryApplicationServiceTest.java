@@ -54,7 +54,8 @@ class InventoryApplicationServiceTest {
             when(inventoryPort.createReservation("SKU-001", "WH-01", "ORDER-001", 10))
                     .thenReturn(externalId);
 
-            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.reserveInventory(command);
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -74,7 +75,8 @@ class InventoryApplicationServiceTest {
             when(inventoryPort.createReservation("SKU-002", "WH-01", "ORDER-002", 50))
                     .thenThrow(new InsufficientInventoryException("Insufficient inventory"));
 
-            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.reserveInventory(command);
 
             assertFalse(result.isSuccess());
             assertNotNull(result.getErrorMessage());
@@ -213,7 +215,8 @@ class InventoryApplicationServiceTest {
             when(inventoryTransactionRepository.save(any(InventoryTransaction.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            InventoryOperationResultDto result = inventoryApplicationService.adjustInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.adjustInventory(command);
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());

@@ -6,7 +6,8 @@ public class InventoryOperationResultDto {
     private final String transactionId;
     private final String errorMessage;
 
-    private InventoryOperationResultDto(boolean success, String transactionId, String errorMessage) {
+    private InventoryOperationResultDto(
+            boolean success, String transactionId, String errorMessage) {
         this.success = success;
         this.transactionId = transactionId;
         this.errorMessage = errorMessage;

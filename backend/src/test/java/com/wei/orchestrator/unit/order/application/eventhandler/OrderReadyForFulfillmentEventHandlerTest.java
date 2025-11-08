@@ -74,12 +74,12 @@ class OrderReadyForFulfillmentEventHandlerTest {
 
             assertEquals(orderId, commands.get(0).getOrderId());
             assertEquals("SKU-001", commands.get(0).getSku());
-            assertEquals("DEFAULT_WAREHOUSE", commands.get(0).getWarehouseId());
+            assertEquals("WH001", commands.get(0).getWarehouseId());
             assertEquals(10, commands.get(0).getQuantity());
 
             assertEquals(orderId, commands.get(1).getOrderId());
             assertEquals("SKU-002", commands.get(1).getSku());
-            assertEquals("DEFAULT_WAREHOUSE", commands.get(1).getWarehouseId());
+            assertEquals("WH001", commands.get(1).getWarehouseId());
             assertEquals(5, commands.get(1).getQuantity());
         }
 

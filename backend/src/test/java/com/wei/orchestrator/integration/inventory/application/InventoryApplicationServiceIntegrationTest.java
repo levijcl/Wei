@@ -50,7 +50,8 @@ class InventoryApplicationServiceIntegrationTest {
             when(inventoryPort.createReservation("SKU-001", "WH-01", "ORDER-001", 10))
                     .thenReturn(externalId);
 
-            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.reserveInventory(command);
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -83,7 +84,8 @@ class InventoryApplicationServiceIntegrationTest {
                             new InsufficientInventoryException(
                                     "Insufficient inventory for SKU: SKU-002"));
 
-            InventoryOperationResultDto result = inventoryApplicationService.reserveInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.reserveInventory(command);
 
             assertFalse(result.isSuccess());
             assertNotNull(result.getErrorMessage());
@@ -279,7 +281,8 @@ class InventoryApplicationServiceIntegrationTest {
                     .when(inventoryPort)
                     .adjustInventory("SKU-008", "WH-01", -5, "Damaged goods");
 
-            InventoryOperationResultDto result = inventoryApplicationService.adjustInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.adjustInventory(command);
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -308,7 +311,8 @@ class InventoryApplicationServiceIntegrationTest {
                     .when(inventoryPort)
                     .adjustInventory("SKU-009", "WH-01", 10, "Found during cycle count");
 
-            InventoryOperationResultDto result = inventoryApplicationService.adjustInventory(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.adjustInventory(command);
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());

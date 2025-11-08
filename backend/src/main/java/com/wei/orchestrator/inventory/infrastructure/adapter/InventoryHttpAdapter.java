@@ -41,8 +41,10 @@ public class InventoryHttpAdapter implements InventoryPort {
             ResponseEntity<CreateReservationResponse> response =
                     restTemplate.postForEntity(url, request, CreateReservationResponse.class);
 
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return ExternalReservationId.of(response.getBody().getReservationId());
+            if (response.getStatusCode().is2xxSuccessful()
+                    && response.getBody() != null
+                    && response.getBody().getData() != null) {
+                return ExternalReservationId.of(response.getBody().getData().getReservationId());
             }
 
             throw new InventorySystemException(

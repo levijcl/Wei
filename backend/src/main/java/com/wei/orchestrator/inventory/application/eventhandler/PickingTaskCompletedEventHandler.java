@@ -66,7 +66,8 @@ public class PickingTaskCompletedEventHandler {
                         reservationTransaction.getExternalReservationId().getValue(),
                         event.getOrderId());
 
-        InventoryOperationResultDto result = inventoryApplicationService.consumeReservation(command);
+        InventoryOperationResultDto result =
+                inventoryApplicationService.consumeReservation(command);
 
         if (result.isSuccess()) {
             logger.info(
