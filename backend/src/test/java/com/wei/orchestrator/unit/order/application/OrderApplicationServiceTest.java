@@ -9,6 +9,7 @@ import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
 import com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException;
 import com.wei.orchestrator.order.domain.model.Order;
+import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.model.valueobject.ScheduledPickupTime;
@@ -230,6 +231,7 @@ class OrderApplicationServiceTest {
             orderApplicationService.createOrder(command);
 
             verify(orderRepository, times(1)).save(any(Order.class));
+            verify(eventPublisher, never()).publishEvent(any(Object.class));
         }
     }
 
@@ -241,16 +243,15 @@ class OrderApplicationServiceTest {
             String orderId = "ORDER-101";
             InitiateFulfillmentCommand command = new InitiateFulfillmentCommand(orderId);
 
-            Order order = mock(Order.class);
-            when(order.getDomainEvents()).thenReturn(new ArrayList<>());
+            Order order = new Order(orderId, List.of(new OrderLineItem("SKU1", 1, BigDecimal.TEN)));
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
             when(orderRepository.save(any(Order.class))).thenReturn(order);
 
             orderApplicationService.initiateFulfillment(command);
 
             verify(orderRepository, times(1)).findById(orderId);
-            verify(order, times(1)).markReadyForFulfillment();
             verify(orderRepository, times(1)).save(order);
+            verify(eventPublisher).publishEvent(any(Object.class));
         }
 
         @Test

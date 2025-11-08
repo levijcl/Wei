@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
+import com.wei.orchestrator.order.application.eventhandler.OrderReadyForFulfillmentEventHandler;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
@@ -25,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.integration.support.locks.LockRegistry;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -39,6 +41,8 @@ class FulfillmentSchedulerIntegrationTest {
     @Autowired private LockRegistry lockRegistry;
 
     @Autowired private DataSource dataSource;
+
+    @MockitoBean private OrderReadyForFulfillmentEventHandler orderReadyForFulfillmentEventHandler;
 
     private JdbcTemplate jdbcTemplate;
 

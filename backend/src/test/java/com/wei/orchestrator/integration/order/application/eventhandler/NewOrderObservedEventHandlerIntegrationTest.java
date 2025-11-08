@@ -1,12 +1,16 @@
 package com.wei.orchestrator.integration.order.application.eventhandler;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 import com.wei.orchestrator.observation.domain.event.NewOrderObservedEvent;
 import com.wei.orchestrator.observation.domain.model.valueobject.ObservationResult;
 import com.wei.orchestrator.observation.domain.model.valueobject.ObservedOrderItem;
+import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.eventhandler.NewOrderObservedEventHandler;
 import com.wei.orchestrator.order.domain.model.Order;
+import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import java.math.BigDecimal;
@@ -21,6 +25,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -31,6 +37,10 @@ class NewOrderObservedEventHandlerIntegrationTest {
     @Autowired private OrderRepository orderRepository;
 
     @Autowired private NewOrderObservedEventHandler eventHandler;
+
+    @Autowired private TransactionTemplate transactionTemplate;
+
+    @MockitoSpyBean private OrderApplicationService orderApplicationService;
 
     @Nested
     class EventPublicationAndHandling {
@@ -219,6 +229,83 @@ class NewOrderObservedEventHandlerIntegrationTest {
             Optional<Order> secondOrder = orderRepository.findById(orderId);
             assertTrue(secondOrder.isPresent());
             assertEquals(firstOrder.get().getOrderId(), secondOrder.get().getOrderId());
+        }
+    }
+
+    @Nested
+    class TransactionIsolation {
+
+        @Test
+        void shouldNotRollbackCallerTransactionWhenHandlerFails() {
+            String callerOrderId = "CALLER-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String handlerOrderId = "HANDLER-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+
+            transactionTemplate.execute(
+                    status -> {
+                        Order callerOrder =
+                                new Order(
+                                        callerOrderId,
+                                        List.of(
+                                                new OrderLineItem(
+                                                        "SKU-CALLER", 5, new BigDecimal("50.00"))));
+                        callerOrder.createOrder();
+                        orderRepository.save(callerOrder);
+                        return null;
+                    });
+
+            doThrow(new RuntimeException("Handler failed - simulating database error"))
+                    .when(orderApplicationService)
+                    .createOrder(any());
+
+            NewOrderObservedEvent event = createTestEvent(handlerOrderId);
+
+            try {
+                eventPublisher.publishEvent(event);
+            } catch (Exception ignored) {
+            }
+
+            Optional<Order> savedCallerOrder = orderRepository.findById(callerOrderId);
+            assertTrue(
+                    savedCallerOrder.isPresent(),
+                    "Caller's order should still be committed despite handler failure");
+            assertEquals(OrderStatus.CREATED, savedCallerOrder.get().getStatus());
+            assertEquals(1, savedCallerOrder.get().getOrderLineItems().size());
+
+            Optional<Order> handlerOrder = orderRepository.findById(handlerOrderId);
+            assertFalse(
+                    handlerOrder.isPresent(), "Handler's order should not exist due to rollback");
+        }
+
+        @Test
+        void shouldCommitBothTransactionsWhenHandlerSucceeds() {
+            String callerOrderId = "CALLER-SUCCESS-" + UUID.randomUUID().toString().substring(0, 8);
+            String handlerOrderId =
+                    "HANDLER-SUCCESS-" + UUID.randomUUID().toString().substring(0, 8);
+
+            transactionTemplate.execute(
+                    status -> {
+                        Order callerOrder =
+                                new Order(
+                                        callerOrderId,
+                                        List.of(
+                                                new OrderLineItem(
+                                                        "SKU-CALLER", 3, new BigDecimal("30.00"))));
+                        callerOrder.createOrder();
+                        orderRepository.save(callerOrder);
+                        return null;
+                    });
+
+            NewOrderObservedEvent event = createTestEvent(handlerOrderId);
+
+            eventPublisher.publishEvent(event);
+
+            Optional<Order> savedCallerOrder = orderRepository.findById(callerOrderId);
+            assertTrue(savedCallerOrder.isPresent(), "Caller's order should be committed");
+            assertEquals(OrderStatus.CREATED, savedCallerOrder.get().getStatus());
+
+            Optional<Order> handlerOrder = orderRepository.findById(handlerOrderId);
+            assertTrue(handlerOrder.isPresent(), "Handler's order should be committed");
+            assertEquals(OrderStatus.CREATED, handlerOrder.get().getStatus());
         }
     }
 

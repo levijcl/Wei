@@ -2,6 +2,7 @@ package com.wei.orchestrator.order.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.command.ReserveInventoryCommand;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
@@ -11,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class OrderReadyForFulfillmentEventHandler {
@@ -29,6 +32,7 @@ public class OrderReadyForFulfillmentEventHandler {
     }
 
     @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleOrderReadyForFulfillment(OrderReadyForFulfillmentEvent event) {
         String orderId = event.getOrderId();
 
@@ -48,10 +52,25 @@ public class OrderReadyForFulfillmentEventHandler {
         for (OrderLineItem item : lineItems) {
             ReserveInventoryCommand command =
                     new ReserveInventoryCommand(
-                            orderId, item.getSku(), "DEFAULT_WAREHOUSE", item.getQuantity());
-            inventoryApplicationService.reserveInventory(command);
+                            orderId, item.getSku(), "WH001", item.getQuantity());
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.reserveInventory(command);
+
+            if (!result.isSuccess()) {
+                logger.error(
+                        "Failed to reserve inventory for order: {}, SKU: {}, error: {}",
+                        orderId,
+                        item.getSku(),
+                        result.getErrorMessage());
+            } else {
+                logger.info(
+                        "Successfully reserved inventory for order: {}, SKU: {}, transactionId: {}",
+                        orderId,
+                        item.getSku(),
+                        result.getTransactionId());
+            }
         }
 
-        logger.info("Successfully initiated inventory reservation for order: {}", orderId);
+        logger.info("Completed inventory reservation process for order: {}", orderId);
     }
 }

@@ -52,7 +52,12 @@ class InventoryHttpAdapterIntegrationTest {
         @Test
         void shouldCreateReservationSuccessfully() throws Exception {
             CreateReservationResponse response = new CreateReservationResponse();
-            response.setReservationId("RES-12345");
+            CreateReservationResponse.ReservationData data =
+                    new CreateReservationResponse.ReservationData();
+            data.setReservationId("RES-12345");
+            response.setSuccess(true);
+            response.setMessage("Reserved 10 units of SKU-001 for order ORDER-001");
+            response.setData(data);
             String responseJson = objectMapper.writeValueAsString(response);
 
             mockServer

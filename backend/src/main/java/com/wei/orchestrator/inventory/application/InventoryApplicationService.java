@@ -1,6 +1,7 @@
 package com.wei.orchestrator.inventory.application;
 
 import com.wei.orchestrator.inventory.application.command.*;
+import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.*;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
@@ -28,7 +29,7 @@ public class InventoryApplicationService {
     }
 
     @Transactional
-    public String reserveInventory(ReserveInventoryCommand command) {
+    public InventoryOperationResultDto reserveInventory(ReserveInventoryCommand command) {
         InventoryTransaction transaction =
                 InventoryTransaction.createReservation(
                         command.getOrderId(),
@@ -51,18 +52,18 @@ public class InventoryApplicationService {
 
             publishEvents(transaction);
 
-            return transaction.getTransactionId();
+            return InventoryOperationResultDto.success(transaction.getTransactionId());
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
             publishEvents(transaction);
-            throw e;
+            return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public void consumeReservation(ConsumeReservationCommand command) {
+    public InventoryOperationResultDto consumeReservation(ConsumeReservationCommand command) {
         InventoryTransaction transaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
@@ -73,7 +74,7 @@ public class InventoryApplicationService {
                                                         + command.getTransactionId()));
 
         if (transaction.getExternalReservationId() == null) {
-            throw new IllegalStateException(
+            return InventoryOperationResultDto.failure(
                     "Cannot consume reservation - no external reservation ID");
         }
 
@@ -88,16 +89,18 @@ public class InventoryApplicationService {
 
             publishEvents(transaction);
 
+            return InventoryOperationResultDto.successVoid();
+
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
             publishEvents(transaction);
-            throw e;
+            return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public void releaseReservation(ReleaseReservationCommand command) {
+    public InventoryOperationResultDto releaseReservation(ReleaseReservationCommand command) {
         InventoryTransaction transaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
@@ -108,7 +111,7 @@ public class InventoryApplicationService {
                                                         + command.getTransactionId()));
 
         if (transaction.getExternalReservationId() == null) {
-            throw new IllegalStateException(
+            return InventoryOperationResultDto.failure(
                     "Cannot release reservation - no external reservation ID");
         }
 
@@ -120,16 +123,18 @@ public class InventoryApplicationService {
 
             publishEvents(transaction);
 
+            return InventoryOperationResultDto.successVoid();
+
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
             publishEvents(transaction);
-            throw e;
+            return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public String increaseInventory(IncreaseInventoryCommand command) {
+    public InventoryOperationResultDto increaseInventory(IncreaseInventoryCommand command) {
         List<TransactionLine> lines = new ArrayList<>();
         lines.add(TransactionLine.of(command.getSku(), command.getQuantity()));
 
@@ -159,18 +164,18 @@ public class InventoryApplicationService {
 
             publishEvents(transaction);
 
-            return transaction.getTransactionId();
+            return InventoryOperationResultDto.success(transaction.getTransactionId());
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
             publishEvents(transaction);
-            throw e;
+            return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public String adjustInventory(AdjustInventoryCommand command) {
+    public InventoryOperationResultDto adjustInventory(AdjustInventoryCommand command) {
         List<TransactionLine> lines = new ArrayList<>();
         lines.add(TransactionLine.of(command.getSku(), command.getQuantityChange()));
 
@@ -200,13 +205,13 @@ public class InventoryApplicationService {
 
             publishEvents(transaction);
 
-            return transaction.getTransactionId();
+            return InventoryOperationResultDto.success(transaction.getTransactionId());
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
             publishEvents(transaction);
-            throw e;
+            return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 

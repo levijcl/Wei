@@ -3,6 +3,7 @@ services:
     image: gvenzl/oracle-free:23-slim
     container_name: order-source-oracle-db
     environment:
+      TZ: Europe/Brussels
       ORACLE_PASSWORD: oracle123
       APP_USER: order_source
       APP_USER_PASSWORD: ordersource123

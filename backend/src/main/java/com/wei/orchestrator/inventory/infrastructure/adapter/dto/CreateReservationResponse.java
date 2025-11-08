@@ -4,80 +4,149 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class CreateReservationResponse {
 
-    @JsonProperty("reservation_id")
-    private String reservationId;
+    @JsonProperty("success")
+    private Boolean success;
 
-    @JsonProperty("sku")
-    private String sku;
+    @JsonProperty("message")
+    private String message;
 
-    @JsonProperty("warehouse_id")
-    private String warehouseId;
+    @JsonProperty("data")
+    private ReservationData data;
 
-    @JsonProperty("order_id")
-    private String orderId;
-
-    @JsonProperty("quantity")
-    private Integer quantity;
-
-    @JsonProperty("status")
-    private String status;
-
-    @JsonProperty("created_at")
-    private String createdAt;
-
-    public String getReservationId() {
-        return reservationId;
+    public Boolean getSuccess() {
+        return success;
     }
 
-    public void setReservationId(String reservationId) {
-        this.reservationId = reservationId;
+    public void setSuccess(Boolean success) {
+        this.success = success;
     }
 
-    public String getSku() {
-        return sku;
+    public String getMessage() {
+        return message;
     }
 
-    public void setSku(String sku) {
-        this.sku = sku;
+    public void setMessage(String message) {
+        this.message = message;
     }
 
-    public String getWarehouseId() {
-        return warehouseId;
+    public ReservationData getData() {
+        return data;
     }
 
-    public void setWarehouseId(String warehouseId) {
-        this.warehouseId = warehouseId;
+    public void setData(ReservationData data) {
+        this.data = data;
     }
 
-    public String getOrderId() {
-        return orderId;
-    }
+    public static class ReservationData {
 
-    public void setOrderId(String orderId) {
-        this.orderId = orderId;
-    }
+        @JsonProperty("RESERVATION_ID")
+        private String reservationId;
 
-    public Integer getQuantity() {
-        return quantity;
-    }
+        @JsonProperty("SKU")
+        private String sku;
 
-    public void setQuantity(Integer quantity) {
-        this.quantity = quantity;
-    }
+        @JsonProperty("WAREHOUSE_ID")
+        private String warehouseId;
 
-    public String getStatus() {
-        return status;
-    }
+        @JsonProperty("ORDER_ID")
+        private String orderId;
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+        @JsonProperty("QUANTITY")
+        private Integer quantity;
 
-    public String getCreatedAt() {
-        return createdAt;
-    }
+        @JsonProperty("STATUS")
+        private String status;
 
-    public void setCreatedAt(String createdAt) {
-        this.createdAt = createdAt;
+        @JsonProperty("CREATED_AT")
+        private String createdAt;
+
+        @JsonProperty("CONSUMED_AT")
+        private String consumedAt;
+
+        @JsonProperty("RELEASED_AT")
+        private String releasedAt;
+
+        @JsonProperty("PRODUCT_NAME")
+        private String productName;
+
+        public String getReservationId() {
+            return reservationId;
+        }
+
+        public void setReservationId(String reservationId) {
+            this.reservationId = reservationId;
+        }
+
+        public String getSku() {
+            return sku;
+        }
+
+        public void setSku(String sku) {
+            this.sku = sku;
+        }
+
+        public String getWarehouseId() {
+            return warehouseId;
+        }
+
+        public void setWarehouseId(String warehouseId) {
+            this.warehouseId = warehouseId;
+        }
+
+        public String getOrderId() {
+            return orderId;
+        }
+
+        public void setOrderId(String orderId) {
+            this.orderId = orderId;
+        }
+
+        public Integer getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(Integer quantity) {
+            this.quantity = quantity;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public String getCreatedAt() {
+            return createdAt;
+        }
+
+        public void setCreatedAt(String createdAt) {
+            this.createdAt = createdAt;
+        }
+
+        public String getConsumedAt() {
+            return consumedAt;
+        }
+
+        public void setConsumedAt(String consumedAt) {
+            this.consumedAt = consumedAt;
+        }
+
+        public String getReleasedAt() {
+            return releasedAt;
+        }
+
+        public void setReleasedAt(String releasedAt) {
+            this.releasedAt = releasedAt;
+        }
+
+        public String getProductName() {
+            return productName;
+        }
+
+        public void setProductName(String productName) {
+            this.productName = productName;
+        }
     }
 }

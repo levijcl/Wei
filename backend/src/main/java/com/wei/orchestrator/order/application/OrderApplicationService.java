@@ -58,12 +58,12 @@ public class OrderApplicationService {
                     order, scheduledPickupTime, fulfillmentLeadTime, LocalDateTime.now());
         }
 
-        Order savedOrder = orderRepository.save(order);
+        orderRepository.save(order);
 
-        savedOrder.getDomainEvents().forEach(eventPublisher::publishEvent);
-        savedOrder.clearDomainEvents();
+        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        order.clearDomainEvents();
 
-        return savedOrder;
+        return order;
     }
 
     public void initiateFulfillment(InitiateFulfillmentCommand command) {
@@ -76,9 +76,9 @@ public class OrderApplicationService {
                                                 "Order not found: " + command.getOrderId()));
 
         order.markReadyForFulfillment();
-        Order savedOrder = orderRepository.save(order);
+        orderRepository.save(order);
 
-        savedOrder.getDomainEvents().forEach(eventPublisher::publishEvent);
-        savedOrder.clearDomainEvents();
+        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        order.clearDomainEvents();
     }
 }
