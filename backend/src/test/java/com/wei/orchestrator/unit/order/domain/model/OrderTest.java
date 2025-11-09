@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
-import com.wei.orchestrator.order.domain.model.ReservationInfo;
 import com.wei.orchestrator.order.domain.model.ShipmentInfo;
 import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
@@ -71,31 +70,35 @@ class OrderTest {
         List<OrderLineItem> items = new ArrayList<>();
         items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
         Order order = new Order("ORDER-005", items);
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
 
-        order.reserveInventory(reservationInfo);
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
 
         assertEquals(OrderStatus.RESERVED, order.getStatus());
-        assertEquals("WH-001", order.getReservationInfo().getWarehouseId());
-        assertEquals(10, order.getReservationInfo().getReservedQty());
+        assertTrue(order.getOrderLineItems().get(0).isReserved());
+        assertEquals(
+                "WH-001", order.getOrderLineItems().get(0).getReservationInfo().getWarehouseId());
+        assertEquals(
+                "EXT-RES-001",
+                order.getOrderLineItems().get(0).getReservationInfo().getExternalReservationId());
     }
 
     @Test
-    void shouldThrowExceptionWhenReservingInventoryWithInvalidStatus() {
+    void shouldThrowExceptionWhenReservingAlreadyReservedLineItem() {
         List<OrderLineItem> items = new ArrayList<>();
         items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
         Order order = new Order("ORDER-006", items);
-        order.setStatus(OrderStatus.RESERVED);
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
 
         IllegalStateException exception =
                 assertThrows(
                         IllegalStateException.class,
                         () -> {
-                            order.reserveInventory(reservationInfo);
+                            order.reserveLineItem(lineItemId, "TX-002", "EXT-RES-002", "WH-001");
                         });
 
-        assertTrue(exception.getMessage().contains("Cannot reserve inventory"));
+        assertTrue(exception.getMessage().contains("already reserved"));
     }
 
     @Test
@@ -168,8 +171,8 @@ class OrderTest {
         Order order = new Order("ORDER-010", items);
         assertEquals(OrderStatus.CREATED, order.getStatus());
 
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
-        order.reserveInventory(reservationInfo);
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
         assertEquals(OrderStatus.RESERVED, order.getStatus());
 
         order.commitOrder();
@@ -427,12 +430,14 @@ class OrderTest {
         items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
         Order order = new Order("ORDER-027", items);
         order.setStatus(OrderStatus.AWAITING_FULFILLMENT);
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
 
-        order.reserveInventory(reservationInfo);
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
 
         assertEquals(OrderStatus.RESERVED, order.getStatus());
-        assertEquals("WH-001", order.getReservationInfo().getWarehouseId());
+        assertTrue(order.getOrderLineItems().get(0).isReserved());
+        assertEquals(
+                "WH-001", order.getOrderLineItems().get(0).getReservationInfo().getWarehouseId());
     }
 
     @Test
@@ -451,8 +456,8 @@ class OrderTest {
         order.markReadyForFulfillment();
         assertEquals(OrderStatus.AWAITING_FULFILLMENT, order.getStatus());
 
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
-        order.reserveInventory(reservationInfo);
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
         assertEquals(OrderStatus.RESERVED, order.getStatus());
 
         order.commitOrder();
@@ -473,8 +478,8 @@ class OrderTest {
         order.markReadyForFulfillment();
         assertEquals(OrderStatus.AWAITING_FULFILLMENT, order.getStatus());
 
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
-        order.reserveInventory(reservationInfo);
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
         assertEquals(OrderStatus.RESERVED, order.getStatus());
 
         order.commitOrder();

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
-import com.wei.orchestrator.order.domain.model.ReservationInfo;
 import com.wei.orchestrator.order.domain.model.ShipmentInfo;
 import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
@@ -73,17 +72,27 @@ class OrderRepositoryIntegrationTest {
         items.add(new OrderLineItem("SKU-200", 7, new BigDecimal("70.00")));
 
         Order order = new Order("ORDER-003", items);
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 7, "RESERVED");
-        order.reserveInventory(reservationInfo);
+        String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
+        order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
 
         Order savedOrder = orderRepository.save(order);
 
         Optional<Order> foundOrder = orderRepository.findById("ORDER-003");
         assertTrue(foundOrder.isPresent());
         assertEquals(OrderStatus.RESERVED, foundOrder.get().getStatus());
-        assertNotNull(foundOrder.get().getReservationInfo());
-        assertEquals("WH-001", foundOrder.get().getReservationInfo().getWarehouseId());
-        assertEquals(7, foundOrder.get().getReservationInfo().getReservedQty());
+        assertTrue(foundOrder.get().getOrderLineItems().get(0).isReserved());
+        assertNotNull(foundOrder.get().getOrderLineItems().get(0).getReservationInfo());
+        assertEquals(
+                "WH-001",
+                foundOrder.get().getOrderLineItems().get(0).getReservationInfo().getWarehouseId());
+        assertEquals(
+                "EXT-RES-001",
+                foundOrder
+                        .get()
+                        .getOrderLineItems()
+                        .get(0)
+                        .getReservationInfo()
+                        .getExternalReservationId());
     }
 
     @Test
@@ -119,15 +128,22 @@ class OrderRepositoryIntegrationTest {
         assertTrue(foundOrder.isPresent());
 
         Order existingOrder = foundOrder.get();
-        ReservationInfo reservationInfo = new ReservationInfo("WH-002", 4, "RESERVED");
-        existingOrder.reserveInventory(reservationInfo);
+        String lineItemId = existingOrder.getOrderLineItems().get(0).getLineItemId();
+        existingOrder.reserveLineItem(lineItemId, "TX-002", "EXT-RES-002", "WH-002");
 
         Order updatedOrder = orderRepository.save(existingOrder);
 
         Optional<Order> reloadedOrder = orderRepository.findById("ORDER-005");
         assertTrue(reloadedOrder.isPresent());
         assertEquals(OrderStatus.RESERVED, reloadedOrder.get().getStatus());
-        assertEquals("WH-002", reloadedOrder.get().getReservationInfo().getWarehouseId());
+        assertEquals(
+                "WH-002",
+                reloadedOrder
+                        .get()
+                        .getOrderLineItems()
+                        .get(0)
+                        .getReservationInfo()
+                        .getWarehouseId());
     }
 
     @Test
@@ -180,8 +196,8 @@ class OrderRepositoryIntegrationTest {
         assertEquals(OrderStatus.CREATED, createdOrder.get().getStatus());
 
         Order orderToReserve = createdOrder.get();
-        ReservationInfo reservationInfo = new ReservationInfo("WH-003", 15, "RESERVED");
-        orderToReserve.reserveInventory(reservationInfo);
+        String lineItemId = orderToReserve.getOrderLineItems().get(0).getLineItemId();
+        orderToReserve.reserveLineItem(lineItemId, "TX-003", "EXT-RES-003", "WH-003");
         orderRepository.save(orderToReserve);
 
         Optional<Order> reservedOrder = orderRepository.findById("ORDER-008");
@@ -430,8 +446,8 @@ class OrderRepositoryIntegrationTest {
         assertEquals(OrderStatus.AWAITING_FULFILLMENT, awaitingOrder.get().getStatus());
 
         Order orderToReserve = awaitingOrder.get();
-        ReservationInfo reservationInfo = new ReservationInfo("WH-001", 10, "RESERVED");
-        orderToReserve.reserveInventory(reservationInfo);
+        String lineItemId = orderToReserve.getOrderLineItems().get(0).getLineItemId();
+        orderToReserve.reserveLineItem(lineItemId, "TX-004", "EXT-RES-004", "WH-001");
         orderRepository.save(orderToReserve);
 
         Optional<Order> reservedOrder = orderRepository.findById("ORDER-021");

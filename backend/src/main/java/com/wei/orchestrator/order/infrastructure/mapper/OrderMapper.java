@@ -1,9 +1,7 @@
 package com.wei.orchestrator.order.infrastructure.mapper;
 
 import com.wei.orchestrator.order.domain.model.*;
-import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
-import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
-import com.wei.orchestrator.order.domain.model.valueobject.ScheduledPickupTime;
+import com.wei.orchestrator.order.domain.model.valueobject.*;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderEntity;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderLineItemEntity;
 import java.time.Duration;
@@ -27,12 +25,6 @@ public class OrderMapper {
 
         if (domain.getFulfillmentLeadTime() != null) {
             entity.setFulfillmentLeadTimeMinutes(domain.getFulfillmentLeadTime().getMinutes());
-        }
-
-        if (domain.getReservationInfo() != null) {
-            entity.setReservationWarehouseId(domain.getReservationInfo().getWarehouseId());
-            entity.setReservationReservedQty(domain.getReservationInfo().getReservedQty());
-            entity.setReservationStatus(domain.getReservationInfo().getStatus());
         }
 
         if (domain.getShipmentInfo() != null) {
@@ -72,15 +64,6 @@ public class OrderMapper {
                             Duration.ofMinutes(entity.getFulfillmentLeadTimeMinutes())));
         }
 
-        if (entity.getReservationWarehouseId() != null) {
-            ReservationInfo reservationInfo =
-                    new ReservationInfo(
-                            entity.getReservationWarehouseId(),
-                            entity.getReservationReservedQty(),
-                            entity.getReservationStatus());
-            order.setReservationInfo(reservationInfo);
-        }
-
         if (entity.getShipmentCarrier() != null) {
             ShipmentInfo shipmentInfo =
                     new ShipmentInfo(
@@ -91,16 +74,74 @@ public class OrderMapper {
         return order;
     }
 
-    private static OrderLineItemEntity toLineItemEntity(OrderLineItem domain, OrderEntity parent) {
+    public static OrderLineItemEntity toLineItemEntity(OrderLineItem domain, OrderEntity parent) {
         OrderLineItemEntity entity = new OrderLineItemEntity();
+        entity.setId(domain.getLineItemId());
         entity.setOrder(parent);
         entity.setSku(domain.getSku());
         entity.setQuantity(domain.getQuantity());
         entity.setPrice(domain.getPrice());
+
+        if (domain.getReservationInfo() != null) {
+            LineReservationInfo resInfo = domain.getReservationInfo();
+            entity.setReservationStatus(resInfo.getStatus().name());
+            entity.setReservationTransactionId(resInfo.getTransactionId());
+            entity.setReservationExternalReservationId(resInfo.getExternalReservationId());
+            entity.setReservationWarehouseId(resInfo.getWarehouseId());
+            entity.setReservationFailureReason(resInfo.getFailureReason());
+            entity.setReservationReservedAt(resInfo.getReservedAt());
+        }
+
+        if (domain.getCommitmentInfo() != null) {
+            LineCommitmentInfo comInfo = domain.getCommitmentInfo();
+            entity.setCommitmentStatus(comInfo.getStatus().name());
+            entity.setCommitmentWesTransactionId(comInfo.getWesTransactionId());
+            entity.setCommitmentFailureReason(comInfo.getFailureReason());
+            entity.setCommitmentCommittedAt(comInfo.getCommittedAt());
+        }
+
         return entity;
     }
 
     private static OrderLineItem toLineItemDomain(OrderLineItemEntity entity) {
-        return new OrderLineItem(entity.getSku(), entity.getQuantity(), entity.getPrice());
+        OrderLineItem domain =
+                new OrderLineItem(entity.getSku(), entity.getQuantity(), entity.getPrice());
+        domain.setLineItemId(entity.getId());
+
+        if (entity.getReservationStatus() != null) {
+            ReservationStatus resStatus = ReservationStatus.valueOf(entity.getReservationStatus());
+            LineReservationInfo resInfo;
+
+            if (resStatus == ReservationStatus.RESERVED) {
+                resInfo =
+                        LineReservationInfo.reserved(
+                                entity.getReservationTransactionId(),
+                                entity.getReservationExternalReservationId(),
+                                entity.getReservationWarehouseId());
+            } else if (resStatus == ReservationStatus.FAILED) {
+                resInfo = LineReservationInfo.failed(entity.getReservationFailureReason());
+            } else {
+                resInfo = LineReservationInfo.pending();
+            }
+
+            domain.setReservationInfo(resInfo);
+        }
+
+        if (entity.getCommitmentStatus() != null) {
+            CommitmentStatus comStatus = CommitmentStatus.valueOf(entity.getCommitmentStatus());
+            LineCommitmentInfo comInfo;
+
+            if (comStatus == CommitmentStatus.COMMITTED) {
+                comInfo = LineCommitmentInfo.committed(entity.getCommitmentWesTransactionId());
+            } else if (comStatus == CommitmentStatus.FAILED) {
+                comInfo = LineCommitmentInfo.failed(entity.getCommitmentFailureReason());
+            } else {
+                comInfo = LineCommitmentInfo.pending();
+            }
+
+            domain.setCommitmentInfo(comInfo);
+        }
+
+        return domain;
     }
 }

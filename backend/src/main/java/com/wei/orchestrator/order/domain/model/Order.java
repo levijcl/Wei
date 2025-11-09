@@ -15,7 +15,6 @@ public class Order {
     private OrderStatus status;
     private ScheduledPickupTime scheduledPickupTime;
     private FulfillmentLeadTime fulfillmentLeadTime;
-    private ReservationInfo reservationInfo;
     private ShipmentInfo shipmentInfo;
     private List<OrderLineItem> orderLineItems;
     private final List<Object> domainEvents;
@@ -40,15 +39,6 @@ public class Order {
             throw new IllegalStateException("Order must have at least one line item");
         }
         this.status = OrderStatus.CREATED;
-    }
-
-    public void reserveInventory(ReservationInfo reservationInfo) {
-        if (this.status != OrderStatus.CREATED && this.status != OrderStatus.AWAITING_FULFILLMENT) {
-            throw new IllegalStateException(
-                    "Cannot reserve inventory for order in status: " + this.status);
-        }
-        this.reservationInfo = reservationInfo;
-        this.status = OrderStatus.RESERVED;
     }
 
     public void commitOrder() {
@@ -115,6 +105,91 @@ public class Order {
         this.status = OrderStatus.FAILED_TO_RESERVE;
     }
 
+    public void reserveLineItem(
+            String lineItemId,
+            String transactionId,
+            String externalReservationId,
+            String warehouseId) {
+        OrderLineItem lineItem = findLineItemById(lineItemId);
+        lineItem.reserveItem(transactionId, externalReservationId, warehouseId);
+        updateOrderStatus();
+    }
+
+    public void markLineReservationFailed(String lineItemId, String reason) {
+        OrderLineItem lineItem = findLineItemById(lineItemId);
+        lineItem.markReservationFailed(reason);
+        updateOrderStatus();
+    }
+
+    public void commitLineItem(String lineItemId, String wesTransactionId) {
+        OrderLineItem lineItem = findLineItemById(lineItemId);
+        lineItem.commitItem(wesTransactionId);
+        updateOrderStatus();
+    }
+
+    public void markLineCommitmentFailed(String lineItemId, String reason) {
+        OrderLineItem lineItem = findLineItemById(lineItemId);
+        lineItem.markCommitmentFailed(reason);
+        updateOrderStatus();
+    }
+
+    public boolean isFullyReserved() {
+        return orderLineItems != null
+                && !orderLineItems.isEmpty()
+                && orderLineItems.stream().allMatch(OrderLineItem::isReserved);
+    }
+
+    public boolean isPartiallyReserved() {
+        return orderLineItems != null
+                && orderLineItems.stream().anyMatch(OrderLineItem::isReserved)
+                && !isFullyReserved();
+    }
+
+    public boolean hasAnyReservationFailed() {
+        return orderLineItems != null
+                && orderLineItems.stream().anyMatch(OrderLineItem::hasReservationFailed);
+    }
+
+    public boolean isFullyCommitted() {
+        return orderLineItems != null
+                && !orderLineItems.isEmpty()
+                && orderLineItems.stream().allMatch(OrderLineItem::isCommitted);
+    }
+
+    public boolean isPartiallyCommitted() {
+        return orderLineItems != null
+                && orderLineItems.stream().anyMatch(OrderLineItem::isCommitted)
+                && !isFullyCommitted();
+    }
+
+    public boolean hasAnyCommitmentFailed() {
+        return orderLineItems != null
+                && orderLineItems.stream().anyMatch(OrderLineItem::hasCommitmentFailed);
+    }
+
+    private OrderLineItem findLineItemById(String lineItemId) {
+        if (orderLineItems == null) {
+            throw new IllegalStateException("Order has no line items");
+        }
+        return orderLineItems.stream()
+                .filter(item -> item.getLineItemId().equals(lineItemId))
+                .findFirst()
+                .orElseThrow(
+                        () -> new IllegalArgumentException("Line item not found: " + lineItemId));
+    }
+
+    private void updateOrderStatus() {
+        if (isFullyCommitted()) {
+            this.status = OrderStatus.COMMITTED;
+        } else if (isPartiallyCommitted()) {
+            this.status = OrderStatus.PARTIALLY_COMMITTED;
+        } else if (isFullyReserved()) {
+            this.status = OrderStatus.RESERVED;
+        } else if (isPartiallyReserved()) {
+            this.status = OrderStatus.PARTIALLY_RESERVED;
+        }
+    }
+
     public String getOrderId() {
         return orderId;
     }
@@ -129,14 +204,6 @@ public class Order {
 
     public void setStatus(OrderStatus status) {
         this.status = status;
-    }
-
-    public ReservationInfo getReservationInfo() {
-        return reservationInfo;
-    }
-
-    public void setReservationInfo(ReservationInfo reservationInfo) {
-        this.reservationInfo = reservationInfo;
     }
 
     public ShipmentInfo getShipmentInfo() {

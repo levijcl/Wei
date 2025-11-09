@@ -6,9 +6,7 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "order_line_item")
 public class OrderLineItemEntity {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
+    @Id private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
@@ -22,6 +20,36 @@ public class OrderLineItemEntity {
 
     @Column(name = "price")
     private BigDecimal price;
+
+    @Column(name = "reservation_status")
+    private String reservationStatus;
+
+    @Column(name = "reservation_transaction_id")
+    private String reservationTransactionId;
+
+    @Column(name = "reservation_external_reservation_id")
+    private String reservationExternalReservationId;
+
+    @Column(name = "reservation_warehouse_id")
+    private String reservationWarehouseId;
+
+    @Column(name = "reservation_failure_reason")
+    private String reservationFailureReason;
+
+    @Column(name = "reservation_reserved_at")
+    private java.time.LocalDateTime reservationReservedAt;
+
+    @Column(name = "commitment_status")
+    private String commitmentStatus;
+
+    @Column(name = "commitment_wes_transaction_id")
+    private String commitmentWesTransactionId;
+
+    @Column(name = "commitment_failure_reason")
+    private String commitmentFailureReason;
+
+    @Column(name = "commitment_committed_at")
+    private java.time.LocalDateTime commitmentCommittedAt;
 
     public OrderLineItemEntity() {}
 
@@ -63,5 +91,85 @@ public class OrderLineItemEntity {
 
     public void setPrice(BigDecimal price) {
         this.price = price;
+    }
+
+    public String getReservationStatus() {
+        return reservationStatus;
+    }
+
+    public void setReservationStatus(String reservationStatus) {
+        this.reservationStatus = reservationStatus;
+    }
+
+    public String getReservationTransactionId() {
+        return reservationTransactionId;
+    }
+
+    public void setReservationTransactionId(String reservationTransactionId) {
+        this.reservationTransactionId = reservationTransactionId;
+    }
+
+    public String getReservationExternalReservationId() {
+        return reservationExternalReservationId;
+    }
+
+    public void setReservationExternalReservationId(String reservationExternalReservationId) {
+        this.reservationExternalReservationId = reservationExternalReservationId;
+    }
+
+    public String getReservationWarehouseId() {
+        return reservationWarehouseId;
+    }
+
+    public void setReservationWarehouseId(String reservationWarehouseId) {
+        this.reservationWarehouseId = reservationWarehouseId;
+    }
+
+    public String getReservationFailureReason() {
+        return reservationFailureReason;
+    }
+
+    public void setReservationFailureReason(String reservationFailureReason) {
+        this.reservationFailureReason = reservationFailureReason;
+    }
+
+    public java.time.LocalDateTime getReservationReservedAt() {
+        return reservationReservedAt;
+    }
+
+    public void setReservationReservedAt(java.time.LocalDateTime reservationReservedAt) {
+        this.reservationReservedAt = reservationReservedAt;
+    }
+
+    public String getCommitmentStatus() {
+        return commitmentStatus;
+    }
+
+    public void setCommitmentStatus(String commitmentStatus) {
+        this.commitmentStatus = commitmentStatus;
+    }
+
+    public String getCommitmentWesTransactionId() {
+        return commitmentWesTransactionId;
+    }
+
+    public void setCommitmentWesTransactionId(String commitmentWesTransactionId) {
+        this.commitmentWesTransactionId = commitmentWesTransactionId;
+    }
+
+    public String getCommitmentFailureReason() {
+        return commitmentFailureReason;
+    }
+
+    public void setCommitmentFailureReason(String commitmentFailureReason) {
+        this.commitmentFailureReason = commitmentFailureReason;
+    }
+
+    public java.time.LocalDateTime getCommitmentCommittedAt() {
+        return commitmentCommittedAt;
+    }
+
+    public void setCommitmentCommittedAt(java.time.LocalDateTime commitmentCommittedAt) {
+        this.commitmentCommittedAt = commitmentCommittedAt;
     }
 }

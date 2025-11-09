@@ -22,9 +22,50 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     @Override
     public Order save(Order order) {
-        OrderEntity entity = OrderMapper.toEntity(order);
-        OrderEntity saved = jpaOrderRepository.save(entity);
+        Optional<OrderEntity> existingEntity = jpaOrderRepository.findById(order.getOrderId());
+        OrderEntity entityToSave;
+
+        if (existingEntity.isPresent()) {
+            entityToSave = existingEntity.get();
+            updateExistingEntity(entityToSave, order);
+        } else {
+            entityToSave = OrderMapper.toEntity(order);
+        }
+
+        OrderEntity saved = jpaOrderRepository.save(entityToSave);
         return OrderMapper.toDomain(saved);
+    }
+
+    private void updateExistingEntity(OrderEntity entity, Order domain) {
+        entity.setStatus(domain.getStatus().name());
+
+        if (domain.getScheduledPickupTime() != null) {
+            entity.setScheduledPickupTime(domain.getScheduledPickupTime().getPickupTime());
+        } else {
+            entity.setScheduledPickupTime(null);
+        }
+
+        if (domain.getFulfillmentLeadTime() != null) {
+            entity.setFulfillmentLeadTimeMinutes(domain.getFulfillmentLeadTime().getMinutes());
+        } else {
+            entity.setFulfillmentLeadTimeMinutes(null);
+        }
+
+        if (domain.getShipmentInfo() != null) {
+            entity.setShipmentCarrier(domain.getShipmentInfo().getCarrier());
+            entity.setShipmentTrackingNumber(domain.getShipmentInfo().getTrackingNumber());
+        } else {
+            entity.setShipmentCarrier(null);
+            entity.setShipmentTrackingNumber(null);
+        }
+
+        entity.getOrderLineItems().clear();
+        domain.getOrderLineItems()
+                .forEach(
+                        item -> {
+                            var lineItemEntity = OrderMapper.toLineItemEntity(item, entity);
+                            entity.getOrderLineItems().add(lineItemEntity);
+                        });
     }
 
     @Override
