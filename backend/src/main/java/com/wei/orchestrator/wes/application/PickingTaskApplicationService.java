@@ -1,6 +1,7 @@
 package com.wei.orchestrator.wes.application;
 
 import com.wei.orchestrator.wes.application.command.*;
+import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
@@ -29,7 +30,8 @@ public class PickingTaskApplicationService {
     }
 
     @Transactional
-    public String createPickingTaskForOrder(CreatePickingTaskForOrderCommand command) {
+    public WesOperationResultDto createPickingTaskForOrder(
+            CreatePickingTaskForOrderCommand command) {
         List<TaskItem> items =
                 command.getItems().stream()
                         .map(dto -> TaskItem.of(dto.getSku(), dto.getQuantity(), dto.getLocation()))
@@ -48,7 +50,7 @@ public class PickingTaskApplicationService {
 
         publishEvents(savedTask);
 
-        return savedTask.getTaskId();
+        return WesOperationResultDto.success(savedTask.getTaskId());
     }
 
     @Transactional

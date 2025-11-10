@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.wei.orchestrator.wes.application.PickingTaskApplicationService;
 import com.wei.orchestrator.wes.application.command.*;
 import com.wei.orchestrator.wes.application.command.dto.TaskItemDto;
+import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
 import com.wei.orchestrator.wes.domain.exception.WesPriorityUpdateException;
 import com.wei.orchestrator.wes.domain.exception.WesTaskCancellationException;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
@@ -45,10 +46,10 @@ class PickingTaskApplicationServiceTest {
             CreatePickingTaskForOrderCommand command =
                     new CreatePickingTaskForOrderCommand("ORDER_001", items, 1);
 
-            String expectedTaskId =
+            WesOperationResultDto result =
                     pickingTaskApplicationService.createPickingTaskForOrder(command);
 
-            assertNotNull(expectedTaskId);
+            assertNotNull(result.getTaskId());
 
             verify(pickingTaskRepository, times(2)).save(any(PickingTask.class));
             verify(wesPort).submitPickingTask(any(PickingTask.class));
