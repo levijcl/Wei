@@ -10,10 +10,11 @@ import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 public class OrderReadyForFulfillmentEventHandler {
@@ -31,7 +32,7 @@ public class OrderReadyForFulfillmentEventHandler {
         this.inventoryApplicationService = inventoryApplicationService;
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleOrderReadyForFulfillment(OrderReadyForFulfillmentEvent event) {
         String orderId = event.getOrderId();

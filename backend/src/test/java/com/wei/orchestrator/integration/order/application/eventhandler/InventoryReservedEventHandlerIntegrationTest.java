@@ -44,7 +44,6 @@ class InventoryReservedEventHandlerIntegrationTest {
         @Test
         void shouldHandleInventoryReservedEvent() {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
-            String transactionId = UUID.randomUUID().toString();
             String externalReservationId =
                     "EXT-RES-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -67,7 +66,7 @@ class InventoryReservedEventHandlerIntegrationTest {
                             externalReservationId,
                             LocalDateTime.now());
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleInventoryReserved(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
@@ -110,7 +109,7 @@ class InventoryReservedEventHandlerIntegrationTest {
                             externalReservationId,
                             LocalDateTime.now());
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleInventoryReserved(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());

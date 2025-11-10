@@ -61,7 +61,7 @@ class ReservationFailedEventHandlerIntegrationTest {
                     new ReservationFailedEvent(
                             transaction.getTransactionId(), orderId, reason, LocalDateTime.now());
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleReservationFailed(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
@@ -97,7 +97,7 @@ class ReservationFailedEventHandlerIntegrationTest {
                     new ReservationFailedEvent(
                             transaction.getTransactionId(), orderId, reason, LocalDateTime.now());
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleReservationFailed(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());

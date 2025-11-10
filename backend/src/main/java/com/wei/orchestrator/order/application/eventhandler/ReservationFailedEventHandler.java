@@ -11,10 +11,11 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 public class ReservationFailedEventHandler {
@@ -32,7 +33,7 @@ public class ReservationFailedEventHandler {
         this.inventoryTransactionRepository = inventoryTransactionRepository;
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleReservationFailed(ReservationFailedEvent failedEvent) {
         String orderId = failedEvent.getOrderId();

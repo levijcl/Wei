@@ -50,7 +50,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             NewOrderObservedEvent event = createTestEvent(orderId);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> createdOrder = orderRepository.findById(orderId);
             assertTrue(createdOrder.isPresent(), "Order should be created in database");
@@ -64,7 +64,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             NewOrderObservedEvent event = createTestEvent(orderId);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> createdOrder = orderRepository.findById(orderId);
             assertTrue(createdOrder.isPresent());
@@ -84,12 +84,12 @@ class NewOrderObservedEventHandlerIntegrationTest {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             NewOrderObservedEvent event = createTestEvent(orderId);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> firstOrder = orderRepository.findById(orderId);
             assertTrue(firstOrder.isPresent(), "Order should be created on first event");
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> secondOrder = orderRepository.findById(orderId);
             assertTrue(secondOrder.isPresent(), "Order should still exist");
@@ -107,8 +107,8 @@ class NewOrderObservedEventHandlerIntegrationTest {
             NewOrderObservedEvent event1 = createTestEvent(orderId1);
             NewOrderObservedEvent event2 = createTestEvent(orderId2);
 
-            eventPublisher.publishEvent(event1);
-            eventPublisher.publishEvent(event2);
+            eventHandler.handleNewOrderObserved(event1);
+            eventHandler.handleNewOrderObserved(event2);
 
             Optional<Order> order1 = orderRepository.findById(orderId1);
             Optional<Order> order2 = orderRepository.findById(orderId2);
@@ -150,7 +150,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
             NewOrderObservedEvent event =
                     new NewOrderObservedEvent("observer-1", observationResult);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> createdOrder = orderRepository.findById(orderId);
             assertTrue(createdOrder.isPresent());
@@ -188,7 +188,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
             NewOrderObservedEvent event =
                     new NewOrderObservedEvent("observer-2", observationResult);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> createdOrder = orderRepository.findById(orderId);
             assertTrue(createdOrder.isPresent());
@@ -260,7 +260,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
             NewOrderObservedEvent event = createTestEvent(handlerOrderId);
 
             try {
-                eventPublisher.publishEvent(event);
+                eventHandler.handleNewOrderObserved(event);
             } catch (Exception ignored) {
             }
 
@@ -297,7 +297,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
 
             NewOrderObservedEvent event = createTestEvent(handlerOrderId);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleNewOrderObserved(event);
 
             Optional<Order> savedCallerOrder = orderRepository.findById(callerOrderId);
             assertTrue(savedCallerOrder.isPresent(), "Caller's order should be committed");

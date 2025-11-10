@@ -65,7 +65,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
             OrderReadyForFulfillmentEvent event = new OrderReadyForFulfillmentEvent(orderId);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleOrderReadyForFulfillment(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
@@ -91,7 +91,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
             OrderReadyForFulfillmentEvent event = new OrderReadyForFulfillmentEvent(orderId);
 
-            eventPublisher.publishEvent(event);
+            eventHandler.handleOrderReadyForFulfillment(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
@@ -169,7 +169,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
     class TransactionIsolation {
 
         @Test
-        void shouldRollbackInitiateFulfillmentWhenHandlerFails() {
+        void shouldNotRollbackInitiateFulfillmentWhenHandlerFailsAfterCommit() {
             String orderId = "CALLER-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
             transactionTemplate.execute(
@@ -189,20 +189,17 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
             InitiateFulfillmentCommand fulfillmentCommand = new InitiateFulfillmentCommand(orderId);
 
-            assertThrows(
-                    RuntimeException.class,
-                    () -> {
-                        orderApplicationService.initiateFulfillment(fulfillmentCommand);
-                    });
+            orderApplicationService.initiateFulfillment(fulfillmentCommand);
 
             Optional<Order> order = orderRepository.findById(orderId);
             assertTrue(
                     order.isPresent(),
                     "Order should still exist (created in separate transaction)");
             assertEquals(
-                    OrderStatus.CREATED,
+                    OrderStatus.AWAITING_FULFILLMENT,
                     order.get().getStatus(),
-                    "Order status should remain CREATED (initiateFulfillment rolled back)");
+                    "Order status should be AWAITING_FULFILLMENT (handler runs after commit, so"
+                            + " initiateFulfillment already committed)");
         }
 
         @Test
