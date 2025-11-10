@@ -153,7 +153,7 @@
 
 | Aggregate               | 所屬 Context         | 責任                                                                 | 關聯物件                                       |
 | ----------------------- | -------------------- | -------------------------------------------------------------------- | ------------------------------------------ |
-| **Order**               | Order Context        | 表示出貨流程主體，包含狀態、任務鏈、對應的 reservation 與 logistics info | `OrderLineItem`, `Reservation`, `Shipment` |
+| **Order**               | Order Context        | 表示出貨流程主體，包含狀態與多個 OrderLineItem（Entity），每個項目追蹤自己的 reservation 與 commitment 狀態 | `OrderLineItem` (Entity), `LineReservationInfo`, `LineCommitmentInfo`, `ShipmentInfo` |
 | **PickingTask**         | WES Context          | 管理揀貨任務（出庫），支援雙來源模型 (ORCHESTRATOR_SUBMITTED / WES_DIRECT)，完成時減少庫存 | `TaskItem`, `WesTaskId`, `TaskOrigin`, `TaskStatus` |
 | **PutawayTask**         | WES Context          | 管理上架任務（入庫），支援雙來源模型，完成時增加庫存，處理退貨與收貨場景 | `TaskItem`, `WesTaskId`, `TaskOrigin`, `SourceType` |
 | **InventoryTransaction**| Inventory Context    | 表示庫存異動（入庫、出庫、調撥等），是實際改變庫存數量的行為主體                | `TransactionLine`, `TransactionType`, `WarehouseLocation` |
@@ -531,18 +531,27 @@ PutawayTask.markCompleted()
 |------|------|----------|
 | `SCHEDULED` | 訂單已建立，等待履約時間窗口 | 訂單含有未來的 scheduledPickupTime |
 | `AWAITING_FULFILLMENT` | 已進入履約窗口，準備預約庫存 | 當前時間 >= (取貨時間 - 履約提前時間) |
+| `PARTIALLY_RESERVED` | 部分訂單項目已預約 | 至少一個 OrderLineItem 已預約，但非全部 |
+| `RESERVED` | 所有訂單項目已預約 | 所有 OrderLineItems 狀態為 RESERVED |
+| `PARTIALLY_COMMITTED` | 部分訂單項目已提交 | 至少一個 OrderLineItem 已提交，但非全部 |
+| `COMMITTED` | 所有訂單項目已提交 | 所有 OrderLineItems 狀態為 COMMITTED |
 | `FAILED_TO_RESERVE` | 庫存預約失敗，進入人工審核 | 庫存預約失敗且無法自動重試 |
 
 **狀態流程：**
 
 ```
 立即履約訂單（無 scheduledPickupTime）：
-CREATED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SHIPPED
+CREATED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERVED
+       → PARTIALLY_COMMITTED → COMMITTED → SHIPPED
 
 排程訂單（有 scheduledPickupTime）：
-CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SHIPPED
+CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERVED
+       → PARTIALLY_COMMITTED → COMMITTED → SHIPPED
                                          ↓
                               FAILED_TO_RESERVE（人工審核）
+
+註：PARTIALLY_RESERVED 和 PARTIALLY_COMMITTED 為可選狀態，
+   表示訂單內部分項目已完成該階段，但非全部項目。
 ```
 
 **基礎設施元件：**
@@ -623,6 +632,187 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → RESERVED → COMMITTED → SH
    - status: AWAITING_FULFILLMENT → FAILED_TO_RESERVE
    - 發佈 OrderMovedToManualReviewEvent
    - 通知營運團隊處理
+```
+
+#### OrderLineItem 生命週期設計 (OrderLineItem Lifecycle Design)
+
+**設計決策：** 將 reservation 與 commitment 資訊直接嵌入 OrderLineItem Entity，而非使用獨立的 ReservationInfo 資料結構或平行集合
+
+**設計原因：**
+
+1. **單一事實來源（Single Source of Truth）**
+   - OrderLineItem 本身經歷完整生命週期：created → reserved → committed → shipped
+   - 避免維護多個平行集合（OrderLineItems + OrderLineReservations + OrderLineCommitments）
+   - 消除同步問題：不需要透過 SKU 匹配多個集合
+
+2. **自然支援部分狀態（Partial States）**
+   - 部分預約（Partial Reservation）：部分 line items 已預約，部分尚未
+   - 部分提交（Partial Commitment）：部分 line items 已提交，部分尚未
+   - Order 狀態可從 line items 計算得出
+
+3. **可擴展性（Extensibility）**
+   - 未來可輕鬆增加更多階段：picking, packing, shipping
+   - 每個階段都是 OrderLineItem 的一個 Value Object
+   - 不需要為每個階段建立新的集合
+
+4. **符合領域語言（Ubiquitous Language）**
+   - 「這個訂單項目已預約並已提交」比「這個訂單有預約資訊」更自然
+   - OrderLineItem 是經歷生命週期的實體（Entity），不只是資料持有者
+
+**Entity 設計：**
+
+**OrderLineItem（訂單項目）**
+- 從單純的資料類別升級為 Entity（具有唯一識別）
+- `lineItemId` (String) - 唯一識別碼
+- `sku` (String) - 商品 SKU
+- `quantity` (int) - 數量
+- `price` (BigDecimal) - 價格
+- `reservationInfo` (LineReservationInfo) - 預約資訊（Value Object）
+- `commitmentInfo` (LineCommitmentInfo) - 提交資訊（Value Object）
+
+**Behaviors：**
+- `reserveItem(transactionId, externalReservationId, warehouseId)` - 標記為已預約
+- `markReservationFailed(String reason)` - 標記預約失敗
+- `commitItem(String wesTransactionId)` - 標記為已提交
+- `markCommitmentFailed(String reason)` - 標記提交失敗
+- `isReserved()` - 查詢是否已預約
+- `isCommitted()` - 查詢是否已提交
+
+**Value Objects 設計：**
+
+**LineReservationInfo（訂單項目預約資訊）**
+- 封裝與 Inventory Context 互動的預約資訊
+- `status` (ReservationStatus) - 預約狀態：PENDING, RESERVED, FAILED
+- `transactionId` (String) - InventoryTransaction ID
+- `externalReservationId` (String) - 外部庫存系統的預約 ID（用於後續 consume/release 操作）
+- `warehouseId` (String) - 倉庫 ID
+- `failureReason` (String) - 失敗原因（若 status = FAILED）
+- `reservedAt` (LocalDateTime) - 預約完成時間
+
+**Factory Methods:**
+- `LineReservationInfo.reserved(transactionId, externalReservationId, warehouseId)` - 建立成功預約
+- `LineReservationInfo.failed(String reason)` - 建立失敗預約
+- `LineReservationInfo.pending()` - 建立待處理狀態
+
+**LineCommitmentInfo（訂單項目提交資訊）**
+- 封裝與 WES Context 互動的提交資訊
+- `status` (CommitmentStatus) - 提交狀態：PENDING, COMMITTED, FAILED
+- `wesTransactionId` (String) - WES 系統交易 ID
+- `failureReason` (String) - 失敗原因（若 status = FAILED）
+- `committedAt` (LocalDateTime) - 提交完成時間
+
+**Factory Methods:**
+- `LineCommitmentInfo.committed(String wesTransactionId)` - 建立成功提交
+- `LineCommitmentInfo.failed(String reason)` - 建立失敗提交
+- `LineCommitmentInfo.pending()` - 建立待處理狀態
+
+**Order Aggregate 方法擴充：**
+
+```java
+// 預約相關
+public void reserveLineItem(String lineItemId, String transactionId,
+                            String externalReservationId, String warehouseId)
+public void markLineReservationFailed(String lineItemId, String reason)
+
+// 提交相關
+public void commitLineItem(String lineItemId, String wesTransactionId)
+public void markLineCommitmentFailed(String lineItemId, String reason)
+
+// 查詢方法
+public boolean isFullyReserved()      // 所有項目已預約
+public boolean isPartiallyReserved()  // 部分項目已預約
+public boolean hasAnyReservationFailed()  // 任一項目預約失敗
+
+public boolean isFullyCommitted()      // 所有項目已提交
+public boolean isPartiallyCommitted()  // 部分項目已提交
+public boolean hasAnyCommitmentFailed()  // 任一項目提交失敗
+
+// 自動更新 Order 狀態
+private void updateOrderStatus()  // 根據 line items 狀態計算 Order 狀態
+```
+
+**訂單狀態擴充：**
+
+| 狀態 | 說明 | 計算規則 |
+|------|------|----------|
+| `PARTIALLY_RESERVED` | 部分項目已預約 | 至少一個 line item 已預約，但非全部 |
+| `RESERVED` | 所有項目已預約 | 所有 line items 狀態為 RESERVED |
+| `PARTIALLY_COMMITTED` | 部分項目已提交 | 至少一個 line item 已提交，但非全部 |
+| `COMMITTED` | 所有項目已提交 | 所有 line items 狀態為 COMMITTED |
+
+**完整狀態流程：**
+
+```
+立即履約訂單（無 scheduledPickupTime）：
+CREATED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERVED
+       → PARTIALLY_COMMITTED → COMMITTED → SHIPPED
+
+排程訂單（有 scheduledPickupTime）：
+CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED
+       → RESERVED → PARTIALLY_COMMITTED → COMMITTED → SHIPPED
+                                         ↓
+                              FAILED_TO_RESERVE（人工審核）
+```
+
+**整合流程範例：**
+
+```
+1. OrderReadyForFulfillmentEvent 觸發
+   - Order 狀態：AWAITING_FULFILLMENT
+   - OrderLineItems: [
+       { lineItemId: "L1", sku: "SKU-A", qty: 10, reservationInfo: null },
+       { lineItemId: "L2", sku: "SKU-B", qty: 5, reservationInfo: null }
+     ]
+
+2. OrderReadyForFulfillmentEventHandler 為每個 line item 建立 InventoryTransaction
+   - InventoryTransaction-1: orderId="ORD-001", sku="SKU-A", qty=10
+   - InventoryTransaction-2: orderId="ORD-001", sku="SKU-B", qty=5
+
+3. InventoryReservedEvent 觸發（SKU-A 成功）
+   - transactionId: "TX-001"
+   - orderId: "ORD-001"
+   - externalReservationId: "EXT-RES-001"
+   - InventoryReservedEventHandler 呼叫:
+     order.reserveLineItem("L1", "TX-001", "EXT-RES-001", "WH001")
+   - OrderLineItem L1 狀態變更：
+     reservationInfo = LineReservationInfo.reserved("TX-001", "EXT-RES-001", "WH001")
+   - Order 狀態自動更新：AWAITING_FULFILLMENT → PARTIALLY_RESERVED
+
+4. InventoryReservedEvent 觸發（SKU-B 成功）
+   - Order 狀態自動更新：PARTIALLY_RESERVED → RESERVED
+
+5. PickingTask 完成後，觸發 commit
+   - CommitLineItem("L1", "WES-TX-001")
+   - Order 狀態：RESERVED → PARTIALLY_COMMITTED
+
+6. 所有項目 commit 完成
+   - Order 狀態：PARTIALLY_COMMITTED → COMMITTED
+```
+
+**失敗處理範例：**
+
+```
+情境：SKU-A 預約失敗，SKU-B 預約成功
+
+1. ReservationFailedEvent 觸發（SKU-A）
+   - transactionId: "TX-001"
+   - orderId: "ORD-001"
+   - reason: "庫存不足"
+
+2. ReservationFailedEventHandler 呼叫:
+   order.markLineReservationFailed("L1", "庫存不足")
+
+3. OrderLineItem L1 狀態變更：
+   reservationInfo = LineReservationInfo.failed("庫存不足")
+
+4. Order 查詢方法：
+   - hasAnyReservationFailed() → true
+   - isFullyReserved() → false
+   - isPartiallyReserved() → true（SKU-B 成功）
+
+5. 業務邏輯決策：
+   - 若為 all-or-nothing 策略：釋放 SKU-B 的預約，標記訂單為 FAILED_TO_RESERVE
+   - 若支援部分履約：繼續處理 SKU-B，標記訂單為 PARTIALLY_RESERVED
 ```
 
 ---
@@ -904,14 +1094,17 @@ src/
                     │   ├── domain/
                     │   │   ├── model/
                     │   │   │   ├── Order.java
-                    │   │   │   ├── OrderLineItem.java
+                    │   │   │   ├── OrderLineItem.java (Entity)
                     │   │   │   ├── OrderManualReview.java
-                    │   │   │   ├── ReservationInfo.java
                     │   │   │   ├── ShipmentInfo.java
                     │   │   │   └── valueobject/
                     │   │   │       ├── OrderStatus.java
                     │   │   │       ├── ScheduledPickupTime.java
                     │   │   │       ├── FulfillmentLeadTime.java
+                    │   │   │       ├── LineReservationInfo.java
+                    │   │   │       ├── LineCommitmentInfo.java
+                    │   │   │       ├── ReservationStatus.java
+                    │   │   │       ├── CommitmentStatus.java
                     │   │   │       ├── ReservationFailureReason.java
                     │   │   │       ├── ReviewPriority.java
                     │   │   │       └── ReviewStatus.java
@@ -1812,7 +2005,6 @@ class Order {
   +status: OrderStatus
   +scheduledPickupTime: ScheduledPickupTime
   +fulfillmentLeadTime: FulfillmentLeadTime
-  +reservationInfo: ReservationInfo
   +shipmentInfo: ShipmentInfo
   +List~OrderLineItem~
   --
@@ -1820,22 +2012,78 @@ class Order {
   +scheduleForLaterFulfillment()
   +markReadyForFulfillment()
   +isReadyForFulfillment()
-  +reserveInventory()
+  +reserveLineItem(lineItemId, ...)
+  +markLineReservationFailed(lineItemId, reason)
+  +commitLineItem(lineItemId, wesTransactionId)
+  +markLineCommitmentFailed(lineItemId, reason)
+  +isFullyReserved()
+  +isPartiallyReserved()
+  +isFullyCommitted()
+  +isPartiallyCommitted()
   +commitOrder()
   +markAsShipped()
   +markAsFailedToReserve()
 }
 
 class OrderLineItem {
-  +sku
-  +quantity
-  +price
+  <<Entity>>
+  +lineItemId: String
+  +sku: String
+  +quantity: int
+  +price: BigDecimal
+  +reservationInfo: LineReservationInfo
+  +commitmentInfo: LineCommitmentInfo
+  --
+  +reserveItem(txId, extResId, whId)
+  +markReservationFailed(reason)
+  +commitItem(wesTransactionId)
+  +markCommitmentFailed(reason)
+  +isReserved()
+  +isCommitted()
 }
 
-class ReservationInfo {
-  +warehouseId
-  +reservedQty
-  +status
+class LineReservationInfo {
+  <<ValueObject>>
+  +status: ReservationStatus
+  +transactionId: String
+  +externalReservationId: String
+  +warehouseId: String
+  +failureReason: String
+  +reservedAt: LocalDateTime
+  --
+  +reserved(txId, extId, whId)
+  +failed(reason)
+  +pending()
+  +isReserved()
+  +isFailed()
+}
+
+class LineCommitmentInfo {
+  <<ValueObject>>
+  +status: CommitmentStatus
+  +wesTransactionId: String
+  +failureReason: String
+  +committedAt: LocalDateTime
+  --
+  +committed(wesTransactionId)
+  +failed(reason)
+  +pending()
+  +isCommitted()
+  +isFailed()
+}
+
+class ReservationStatus {
+  <<Enum>>
+  +PENDING
+  +RESERVED
+  +FAILED
+}
+
+class CommitmentStatus {
+  <<Enum>>
+  +PENDING
+  +COMMITTED
+  +FAILED
 }
 
 class ShipmentInfo {
@@ -1845,7 +2093,7 @@ class ShipmentInfo {
 
 class OrderStatus {
   <<ValueObject>>
-  +status: CREATED | SCHEDULED | AWAITING_FULFILLMENT | RESERVED | COMMITTED | SHIPPED | FAILED_TO_RESERVE
+  +status: CREATED | SCHEDULED | AWAITING_FULFILLMENT | PARTIALLY_RESERVED | RESERVED | PARTIALLY_COMMITTED | COMMITTED | SHIPPED | FAILED_TO_RESERVE
 }
 
 class ScheduledPickupTime {
@@ -1896,11 +2144,16 @@ class ReviewStatus {
 }
 
 Order "1" --> "many" OrderLineItem
-Order --> ReservationInfo
 Order --> ShipmentInfo
 Order --> OrderStatus
 Order --> ScheduledPickupTime
 Order --> FulfillmentLeadTime
+
+OrderLineItem --> LineReservationInfo
+OrderLineItem --> LineCommitmentInfo
+LineReservationInfo --> ReservationStatus
+LineCommitmentInfo --> CommitmentStatus
+
 OrderManualReview --> ReservationFailureReason
 OrderManualReview --> ReviewPriority
 OrderManualReview --> ReviewStatus

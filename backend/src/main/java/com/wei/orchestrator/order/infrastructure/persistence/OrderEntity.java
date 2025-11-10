@@ -21,15 +21,6 @@ public class OrderEntity {
     @Column(name = "fulfillment_lead_time_minutes")
     private Long fulfillmentLeadTimeMinutes;
 
-    @Column(name = "reservation_warehouse_id")
-    private String reservationWarehouseId;
-
-    @Column(name = "reservation_reserved_qty")
-    private Integer reservationReservedQty;
-
-    @Column(name = "reservation_status")
-    private String reservationStatus;
-
     @Column(name = "shipment_carrier")
     private String shipmentCarrier;
 
@@ -71,30 +62,6 @@ public class OrderEntity {
 
     public void setFulfillmentLeadTimeMinutes(Long fulfillmentLeadTimeMinutes) {
         this.fulfillmentLeadTimeMinutes = fulfillmentLeadTimeMinutes;
-    }
-
-    public String getReservationWarehouseId() {
-        return reservationWarehouseId;
-    }
-
-    public void setReservationWarehouseId(String reservationWarehouseId) {
-        this.reservationWarehouseId = reservationWarehouseId;
-    }
-
-    public Integer getReservationReservedQty() {
-        return reservationReservedQty;
-    }
-
-    public void setReservationReservedQty(Integer reservationReservedQty) {
-        this.reservationReservedQty = reservationReservedQty;
-    }
-
-    public String getReservationStatus() {
-        return reservationStatus;
-    }
-
-    public void setReservationStatus(String reservationStatus) {
-        this.reservationStatus = reservationStatus;
     }
 
     public String getShipmentCarrier() {

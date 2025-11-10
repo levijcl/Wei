@@ -54,14 +54,6 @@ public class OrderController {
                         .map(this::toOrderLineItemDto)
                         .collect(Collectors.toList()));
 
-        if (order.getReservationInfo() != null) {
-            response.setReservationInfo(
-                    new OrderResponse.ReservationInfoDto(
-                            order.getReservationInfo().getWarehouseId(),
-                            order.getReservationInfo().getReservedQty(),
-                            order.getReservationInfo().getStatus()));
-        }
-
         if (order.getShipmentInfo() != null) {
             response.setShipmentInfo(
                     new OrderResponse.ShipmentInfoDto(

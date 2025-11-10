@@ -8,10 +8,11 @@ import com.wei.orchestrator.order.application.translator.ObservationToOrderTrans
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 public class NewOrderObservedEventHandler {
@@ -32,7 +33,7 @@ public class NewOrderObservedEventHandler {
         this.translator = translator;
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleNewOrderObserved(NewOrderObservedEvent event) {
         ObservationResult observedOrder = event.getObservedOrder();
