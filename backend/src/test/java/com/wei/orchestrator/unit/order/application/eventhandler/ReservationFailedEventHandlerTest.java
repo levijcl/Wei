@@ -3,13 +3,12 @@ package com.wei.orchestrator.unit.order.application.eventhandler;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.when;
 
-import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationFailedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.WarehouseLocation;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
-import com.wei.orchestrator.order.application.eventhandler.InventoryReservedEventHandler;
+import com.wei.orchestrator.order.application.eventhandler.ReservationFailedEventHandler;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
@@ -26,27 +25,26 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class InventoryReservedEventHandlerTest {
+class ReservationFailedEventHandlerTest {
 
     @Mock private OrderRepository orderRepository;
 
     @Mock private InventoryTransactionRepository inventoryTransactionRepository;
 
-    @InjectMocks private InventoryReservedEventHandler eventHandler;
+    @InjectMocks private ReservationFailedEventHandler eventHandler;
 
     @Nested
-    class handleInventoryReservedTest {
+    class handleReservationFailedTest {
 
         @Test
-        void shouldUpdateOrderLineItemWhenInventoryReserved() {
+        void shouldMarkOrderLineItemAsFailedWhenReservationFails() {
             String orderId = "ORDER-001";
             String transactionId = "TX-001";
-            String externalReservationId = "EXT-RES-001";
+            String reason = "Insufficient inventory";
             String warehouseId = "WH-001";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMockOrder(orderId);
             OrderLineItem item = order.getOrderLineItems().get(0);
@@ -57,29 +55,34 @@ class InventoryReservedEventHandlerTest {
             when(inventoryTransactionRepository.findById(transactionId))
                     .thenReturn(Optional.of(transaction));
 
-            eventHandler.handleInventoryReserved(event);
+            eventHandler.handleReservationFailed(event);
 
             verify(orderRepository, times(1)).findById(orderId);
             verify(inventoryTransactionRepository, times(1)).findById(transactionId);
-            verify(orderRepository, times(1)).save(order);
+            verify(orderRepository, times(2)).save(order);
 
-            assertTrue(order.getOrderLineItems().get(0).isReserved());
-            assertEquals(OrderStatus.RESERVED, order.getStatus());
+            assertTrue(order.getOrderLineItems().get(0).hasReservationFailed());
+            assertEquals(OrderStatus.FAILED_TO_RESERVE, order.getStatus());
         }
 
         @Test
-        void shouldHandleMultipleLineItemsCorrectly() {
+        void shouldHandlePartialFailureForMultipleLineItems() {
             String orderId = "ORDER-002";
             String transactionId = "TX-002";
-            String externalReservationId = "EXT-RES-002";
+            String reason = "Insufficient inventory";
             String warehouseId = "WH-002";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMultiItemOrder(orderId);
-            OrderLineItem item = order.getOrderLineItems().get(0);
+            order.reserveLineItem(
+                    order.getOrderLineItems().get(0).getLineItemId(),
+                    "OTHER-TX",
+                    "EXT-RES-001",
+                    warehouseId);
+
+            OrderLineItem item = order.getOrderLineItems().get(1);
             InventoryTransaction transaction =
                     createTransactionWithSku(transactionId, orderId, warehouseId, item.getSku());
 
@@ -87,12 +90,12 @@ class InventoryReservedEventHandlerTest {
             when(inventoryTransactionRepository.findById(transactionId))
                     .thenReturn(Optional.of(transaction));
 
-            eventHandler.handleInventoryReserved(event);
+            eventHandler.handleReservationFailed(event);
 
             verify(orderRepository, times(1)).save(order);
 
             assertTrue(order.getOrderLineItems().get(0).isReserved());
-            assertFalse(order.getOrderLineItems().get(1).isReserved());
+            assertTrue(order.getOrderLineItems().get(1).hasReservationFailed());
             assertEquals(OrderStatus.PARTIALLY_RESERVED, order.getStatus());
         }
 
@@ -100,15 +103,14 @@ class InventoryReservedEventHandlerTest {
         void shouldSkipProcessingWhenOrderNotFound() {
             String orderId = "ORDER-003";
             String transactionId = "TX-003";
-            String externalReservationId = "EXT-RES-003";
+            String reason = "Insufficient inventory";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
-            eventHandler.handleInventoryReserved(event);
+            eventHandler.handleReservationFailed(event);
 
             verify(orderRepository, times(1)).findById(orderId);
             verify(inventoryTransactionRepository, never()).findById(any());
@@ -119,11 +121,10 @@ class InventoryReservedEventHandlerTest {
         void shouldThrowExceptionWhenTransactionNotFound() {
             String orderId = "ORDER-004";
             String transactionId = "TX-004";
-            String externalReservationId = "EXT-RES-004";
+            String reason = "Insufficient inventory";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMockOrder(orderId);
 
@@ -135,7 +136,7 @@ class InventoryReservedEventHandlerTest {
                     assertThrows(
                             IllegalStateException.class,
                             () -> {
-                                eventHandler.handleInventoryReserved(event);
+                                eventHandler.handleReservationFailed(event);
                             });
 
             assertTrue(exception.getMessage().contains("InventoryTransaction not found"));
@@ -149,12 +150,11 @@ class InventoryReservedEventHandlerTest {
         void shouldThrowExceptionWhenTransactionHasNoLines() {
             String orderId = "ORDER-005";
             String transactionId = "TX-005";
-            String externalReservationId = "EXT-RES-005";
+            String reason = "Insufficient inventory";
             String warehouseId = "WH-005";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMockOrder(orderId);
             InventoryTransaction transaction =
@@ -168,7 +168,7 @@ class InventoryReservedEventHandlerTest {
                     assertThrows(
                             IllegalStateException.class,
                             () -> {
-                                eventHandler.handleInventoryReserved(event);
+                                eventHandler.handleReservationFailed(event);
                             });
 
             assertTrue(exception.getMessage().contains("InventoryTransaction has no lines"));
@@ -179,12 +179,11 @@ class InventoryReservedEventHandlerTest {
         void shouldThrowExceptionWhenLineItemNotFoundForSku() {
             String orderId = "ORDER-006";
             String transactionId = "TX-006";
-            String externalReservationId = "EXT-RES-006";
+            String reason = "Insufficient inventory";
             String warehouseId = "WH-006";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMockOrder(orderId);
             InventoryTransaction transaction =
@@ -198,7 +197,7 @@ class InventoryReservedEventHandlerTest {
                     assertThrows(
                             IllegalStateException.class,
                             () -> {
-                                eventHandler.handleInventoryReserved(event);
+                                eventHandler.handleReservationFailed(event);
                             });
 
             assertTrue(exception.getMessage().contains("Order line item not found for SKU"));
@@ -206,49 +205,14 @@ class InventoryReservedEventHandlerTest {
         }
 
         @Test
-        void shouldExtractCorrectSkuFromTransaction() {
-            String orderId = "ORDER-008";
-            String transactionId = "TX-008";
-            String externalReservationId = "EXT-RES-008";
-            String warehouseId = "WH-008";
+        void shouldMarkAllLineItemsAsFailedWhenAllFail() {
+            String orderId = "ORDER-007";
+            String transactionId = "TX-007";
+            String reason = "Warehouse offline";
+            String warehouseId = "WH-007";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
-
-            Order order = createMultiItemOrder(orderId);
-            OrderLineItem item = order.getOrderLineItems().get(0);
-            InventoryTransaction transaction =
-                    createTransactionWithSku(transactionId, orderId, warehouseId, item.getSku());
-
-            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-            when(inventoryTransactionRepository.findById(transactionId))
-                    .thenReturn(Optional.of(transaction));
-
-            eventHandler.handleInventoryReserved(event);
-
-            assertTrue(order.getOrderLineItems().get(0).isReserved());
-            assertEquals(
-                    "WH-008",
-                    order.getOrderLineItems().get(0).getReservationInfo().getWarehouseId());
-            assertEquals(
-                    externalReservationId,
-                    order.getOrderLineItems()
-                            .get(0)
-                            .getReservationInfo()
-                            .getExternalReservationId());
-        }
-
-        @Test
-        void shouldHandleTransactionWithMultipleTransactionLines() {
-            String orderId = "ORDER-009";
-            String transactionId = "TX-009";
-            String externalReservationId = "EXT-RES-009";
-            String warehouseId = "WH-009";
-
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMultiItemOrder(orderId);
             InventoryTransaction transaction =
@@ -259,43 +223,52 @@ class InventoryReservedEventHandlerTest {
             when(inventoryTransactionRepository.findById(transactionId))
                     .thenReturn(Optional.of(transaction));
 
-            eventHandler.handleInventoryReserved(event);
+            eventHandler.handleReservationFailed(event);
 
-            verify(orderRepository, times(1)).save(order);
+            verify(orderRepository, times(2)).save(order);
 
-            assertTrue(order.getOrderLineItems().get(0).isReserved());
-            assertTrue(order.getOrderLineItems().get(1).isReserved());
-            assertEquals(OrderStatus.RESERVED, order.getStatus());
-            assertEquals(
-                    transactionId,
-                    order.getOrderLineItems().get(0).getReservationInfo().getTransactionId());
-            assertEquals(
-                    transactionId,
-                    order.getOrderLineItems().get(1).getReservationInfo().getTransactionId());
-            assertEquals(
-                    externalReservationId,
-                    order.getOrderLineItems()
-                            .get(0)
-                            .getReservationInfo()
-                            .getExternalReservationId());
-            assertEquals(
-                    externalReservationId,
-                    order.getOrderLineItems()
-                            .get(1)
-                            .getReservationInfo()
-                            .getExternalReservationId());
+            assertTrue(order.getOrderLineItems().get(0).hasReservationFailed());
+            assertTrue(order.getOrderLineItems().get(1).hasReservationFailed());
+            assertEquals(OrderStatus.FAILED_TO_RESERVE, order.getStatus());
+        }
+
+        @Test
+        void shouldHandleTransactionWithMultipleTransactionLines() {
+            String orderId = "ORDER-008";
+            String transactionId = "TX-008";
+            String reason = "Insufficient inventory";
+            String warehouseId = "WH-008";
+
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
+
+            Order order = createMultiItemOrder(orderId);
+            InventoryTransaction transaction =
+                    createTransactionWithMultipleSkus(
+                            transactionId, orderId, warehouseId, "SKU-001", "SKU-002");
+
+            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(inventoryTransactionRepository.findById(transactionId))
+                    .thenReturn(Optional.of(transaction));
+
+            eventHandler.handleReservationFailed(event);
+
+            verify(orderRepository, times(2)).save(order);
+
+            assertTrue(order.getOrderLineItems().get(0).hasReservationFailed());
+            assertTrue(order.getOrderLineItems().get(1).hasReservationFailed());
+            assertEquals(OrderStatus.FAILED_TO_RESERVE, order.getStatus());
         }
 
         @Test
         void shouldThrowExceptionWhenTransactionLineSkuNotInOrder() {
-            String orderId = "ORDER-010";
-            String transactionId = "TX-010";
-            String externalReservationId = "EXT-RES-010";
-            String warehouseId = "WH-010";
+            String orderId = "ORDER-009";
+            String transactionId = "TX-009";
+            String reason = "Insufficient inventory";
+            String warehouseId = "WH-009";
 
-            InventoryReservedEvent event =
-                    new InventoryReservedEvent(
-                            transactionId, orderId, externalReservationId, LocalDateTime.now());
+            ReservationFailedEvent event =
+                    new ReservationFailedEvent(transactionId, orderId, reason, LocalDateTime.now());
 
             Order order = createMultiItemOrder(orderId);
             InventoryTransaction transaction =
@@ -310,7 +283,7 @@ class InventoryReservedEventHandlerTest {
                     assertThrows(
                             IllegalStateException.class,
                             () -> {
-                                eventHandler.handleInventoryReserved(event);
+                                eventHandler.handleReservationFailed(event);
                             });
 
             assertTrue(exception.getMessage().contains("Order line item not found for SKU"));
@@ -322,13 +295,9 @@ class InventoryReservedEventHandlerTest {
     private Order createMockOrder(String orderId) {
         List<OrderLineItem> lineItems =
                 List.of(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
-        return new Order(orderId, lineItems);
-    }
-
-    private Order createSingleItemOrder(String orderId) {
-        List<OrderLineItem> lineItems =
-                List.of(new OrderLineItem("SKU-001", 5, new BigDecimal("50.00")));
-        return new Order(orderId, lineItems);
+        Order order = new Order(orderId, lineItems);
+        order.markReadyForFulfillment();
+        return order;
     }
 
     private Order createMultiItemOrder(String orderId) {
@@ -336,7 +305,9 @@ class InventoryReservedEventHandlerTest {
                 List.of(
                         new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")),
                         new OrderLineItem("SKU-002", 5, new BigDecimal("50.00")));
-        return new Order(orderId, lineItems);
+        Order order = new Order(orderId, lineItems);
+        order.markReadyForFulfillment();
+        return order;
     }
 
     private InventoryTransaction createTransactionWithSku(

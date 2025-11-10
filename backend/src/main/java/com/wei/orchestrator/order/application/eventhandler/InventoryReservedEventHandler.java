@@ -69,33 +69,43 @@ public class InventoryReservedEventHandler {
             throw new IllegalStateException("InventoryTransaction has no lines: " + transactionId);
         }
 
-        TransactionLine transactionLine = transactionLines.get(0);
-        String sku = transactionLine.getSku();
         String warehouseId = transaction.getWarehouseLocation().getWarehouseId();
 
-        OrderLineItem matchingLineItem =
-                order.getOrderLineItems().stream()
-                        .filter(item -> item.getSku().equals(sku))
-                        .findFirst()
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "Order line item not found for SKU: " + sku));
+        for (TransactionLine transactionLine : transactionLines) {
+            String sku = transactionLine.getSku();
 
-        order.reserveLineItem(
-                matchingLineItem.getLineItemId(),
-                transactionId,
-                externalReservationId,
-                warehouseId);
+            OrderLineItem matchingLineItem =
+                    order.getOrderLineItems().stream()
+                            .filter(item -> item.getSku().equals(sku))
+                            .findFirst()
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalStateException(
+                                                    "Order line item not found for SKU: "
+                                                            + sku
+                                                            + " in transaction: "
+                                                            + transactionId));
+
+            order.reserveLineItem(
+                    matchingLineItem.getLineItemId(),
+                    transactionId,
+                    externalReservationId,
+                    warehouseId);
+
+            logger.info(
+                    "Reserved line item for order {}, SKU: {}, lineItemId: {}",
+                    orderId,
+                    sku,
+                    matchingLineItem.getLineItemId());
+        }
 
         orderRepository.save(order);
 
         logger.info(
-                "Successfully updated order {} with reservation for SKU: {}, lineItemId: {}, new"
-                        + " order status: {}",
+                "Successfully updated order {} with reservations for {} line item(s), new order"
+                        + " status: {}",
                 orderId,
-                sku,
-                matchingLineItem.getLineItemId(),
+                transactionLines.size(),
                 order.getStatus());
     }
 }

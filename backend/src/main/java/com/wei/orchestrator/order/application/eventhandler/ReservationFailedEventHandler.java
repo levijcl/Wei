@@ -68,31 +68,45 @@ public class ReservationFailedEventHandler {
             throw new IllegalStateException("InventoryTransaction has no lines: " + transactionId);
         }
 
-        TransactionLine transactionLine = transactionLines.get(0);
-        String sku = transactionLine.getSku();
+        for (TransactionLine transactionLine : transactionLines) {
+            String sku = transactionLine.getSku();
 
-        OrderLineItem matchingLineItem =
-                order.getOrderLineItems().stream()
-                        .filter(item -> item.getSku().equals(sku))
-                        .findFirst()
-                        .orElseThrow(
-                                () ->
-                                        new IllegalStateException(
-                                                "Order line item not found for SKU: " + sku));
+            OrderLineItem matchingLineItem =
+                    order.getOrderLineItems().stream()
+                            .filter(item -> item.getSku().equals(sku))
+                            .findFirst()
+                            .orElseThrow(
+                                    () ->
+                                            new IllegalStateException(
+                                                    "Order line item not found for SKU: "
+                                                            + sku
+                                                            + " in transaction: "
+                                                            + transactionId));
 
-        order.markLineReservationFailed(matchingLineItem.getLineItemId(), reason);
+            order.markLineReservationFailed(matchingLineItem.getLineItemId(), reason);
+
+            logger.warn(
+                    "Marked line item as failed for order {}, SKU: {}, lineItemId: {}, reason: {}",
+                    orderId,
+                    sku,
+                    matchingLineItem.getLineItemId(),
+                    reason);
+        }
 
         orderRepository.save(order);
 
         logger.warn(
-                "Marked order {} line item as reservation failed for SKU: {}, lineItemId: {}, order"
+                "Processed reservation failure for order {} affecting {} line item(s), order"
                         + " status: {}",
                 orderId,
-                sku,
-                matchingLineItem.getLineItemId(),
+                transactionLines.size(),
                 order.getStatus());
 
-        if (order.hasAnyReservationFailed() && !order.isPartiallyReserved()) {
+        if (order.hasAnyReservationFailed()
+                && !order.isPartiallyReserved()
+                && order.getStatus()
+                        != com.wei.orchestrator.order.domain.model.valueobject.OrderStatus
+                                .FAILED_TO_RESERVE) {
             order.markAsFailedToReserve(
                     "All line items failed to reserve. First reason: " + reason);
             orderRepository.save(order);
