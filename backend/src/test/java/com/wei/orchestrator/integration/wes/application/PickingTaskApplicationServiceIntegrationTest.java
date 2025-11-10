@@ -120,9 +120,11 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand command =
                     new CreatePickingTaskForOrderCommand("ORDER_INT_004", items, 3);
 
-            assertThrows(
-                    WesSubmissionException.class,
-                    () -> pickingTaskApplicationService.createPickingTaskForOrder(command));
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command);
+
+            assertFalse(result.isSuccess());
+            assertNotNull(result.getErrorMessage());
         }
     }
 
