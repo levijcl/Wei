@@ -42,15 +42,17 @@ public class PickingTaskApplicationService {
 
         PickingTask savedTask = pickingTaskRepository.save(pickingTask);
 
-        WesTaskId wesTaskId = wesPort.submitPickingTask(savedTask);
+        try {
+            WesTaskId wesTaskId = wesPort.submitPickingTask(savedTask);
+            savedTask.submitToWes(wesTaskId);
 
-        savedTask.submitToWes(wesTaskId);
+            pickingTaskRepository.save(savedTask);
+            publishEvents(savedTask);
 
-        pickingTaskRepository.save(savedTask);
-
-        publishEvents(savedTask);
-
-        return WesOperationResultDto.success(savedTask.getTaskId());
+            return WesOperationResultDto.success(savedTask.getTaskId());
+        } catch (Exception e) {
+            return WesOperationResultDto.failure(e.getMessage());
+        }
     }
 
     @Transactional

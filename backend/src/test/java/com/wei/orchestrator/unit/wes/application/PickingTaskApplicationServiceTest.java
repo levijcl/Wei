@@ -55,6 +55,24 @@ class PickingTaskApplicationServiceTest {
             verify(wesPort).submitPickingTask(any(PickingTask.class));
             verify(eventPublisher, times(2)).publishEvent(any(Object.class));
         }
+
+        @Test
+        void shouldCreatePickingTaskForOrderFailed() {
+            when(pickingTaskRepository.save(any(PickingTask.class)))
+                    .thenAnswer(invocation -> invocation.getArgument(0));
+            when(wesPort.submitPickingTask(any(PickingTask.class)))
+                    .thenThrow(new RuntimeException("Connection fail"));
+
+            List<TaskItemDto> items = List.of(new TaskItemDto("SKU001", 10, "WH001"));
+            CreatePickingTaskForOrderCommand command =
+                    new CreatePickingTaskForOrderCommand("ORDER_001", items, 1);
+
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command);
+
+            assertFalse(result.isSuccess());
+            assertEquals("Connection fail", result.getErrorMessage());
+        }
     }
 
     @Nested
