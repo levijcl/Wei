@@ -1,6 +1,7 @@
 package com.wei.orchestrator.order.domain.model;
 
 import com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent;
+import com.wei.orchestrator.order.domain.event.OrderReservedEvent;
 import com.wei.orchestrator.order.domain.event.OrderScheduledEvent;
 import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
@@ -179,15 +180,31 @@ public class Order {
     }
 
     private void updateOrderStatus() {
+        OrderStatus previousStatus = this.status;
+
         if (isFullyCommitted()) {
             this.status = OrderStatus.COMMITTED;
         } else if (isPartiallyCommitted()) {
             this.status = OrderStatus.PARTIALLY_COMMITTED;
         } else if (isFullyReserved()) {
             this.status = OrderStatus.RESERVED;
+            if (previousStatus != OrderStatus.RESERVED) {
+                this.domainEvents.add(
+                        new OrderReservedEvent(this.orderId, getReservedLineItemIds()));
+            }
         } else if (isPartiallyReserved()) {
             this.status = OrderStatus.PARTIALLY_RESERVED;
         }
+    }
+
+    private List<String> getReservedLineItemIds() {
+        return orderLineItems.stream()
+                .filter(
+                        item ->
+                                item.getReservationInfo() != null
+                                        && item.getReservationInfo().isReserved())
+                .map(OrderLineItem::getLineItemId)
+                .toList();
     }
 
     public String getOrderId() {

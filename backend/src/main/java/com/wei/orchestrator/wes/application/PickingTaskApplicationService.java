@@ -51,6 +51,10 @@ public class PickingTaskApplicationService {
 
             return WesOperationResultDto.success(savedTask.getTaskId());
         } catch (Exception e) {
+            savedTask.markFailed(e.getMessage());
+            pickingTaskRepository.save(savedTask);
+            publishEvents(savedTask);
+
             return WesOperationResultDto.failure(e.getMessage());
         }
     }

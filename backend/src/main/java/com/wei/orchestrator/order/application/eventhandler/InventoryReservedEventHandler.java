@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,12 +26,15 @@ public class InventoryReservedEventHandler {
 
     private final OrderRepository orderRepository;
     private final InventoryTransactionRepository inventoryTransactionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public InventoryReservedEventHandler(
             OrderRepository orderRepository,
-            InventoryTransactionRepository inventoryTransactionRepository) {
+            InventoryTransactionRepository inventoryTransactionRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.inventoryTransactionRepository = inventoryTransactionRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -101,6 +105,9 @@ public class InventoryReservedEventHandler {
         }
 
         orderRepository.save(order);
+
+        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        order.clearDomainEvents();
 
         logger.info(
                 "Successfully updated order {} with reservations for {} line item(s), new order"
