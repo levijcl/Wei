@@ -24,6 +24,14 @@ public final class LineCommitmentInfo {
         return new LineCommitmentInfo(CommitmentStatus.PENDING, null, null, null);
     }
 
+    public static LineCommitmentInfo inProgress(String pickingTaskId) {
+        if (pickingTaskId == null || pickingTaskId.isBlank()) {
+            throw new IllegalArgumentException("Picking task ID cannot be null or blank");
+        }
+        return new LineCommitmentInfo(
+                CommitmentStatus.IN_PROGRESS, pickingTaskId, null, LocalDateTime.now());
+    }
+
     public static LineCommitmentInfo committed(String wesTransactionId) {
         if (wesTransactionId == null || wesTransactionId.isBlank()) {
             throw new IllegalArgumentException("WES transaction ID cannot be null or blank");
