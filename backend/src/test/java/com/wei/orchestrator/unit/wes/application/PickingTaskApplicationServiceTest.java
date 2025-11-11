@@ -72,6 +72,7 @@ class PickingTaskApplicationServiceTest {
 
             assertFalse(result.isSuccess());
             assertEquals("Connection fail", result.getErrorMessage());
+            verify(eventPublisher, times(2)).publishEvent(any(Object.class));
         }
     }
 
