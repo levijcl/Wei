@@ -43,13 +43,6 @@ public class OrderLineItem {
     }
 
     public void markPickingInProgress(String pickingTaskId) {
-        if (!isReserved()) {
-            throw new IllegalStateException(
-                    "Cannot mark picking in progress for unreserved line item " + lineItemId);
-        }
-        if (this.commitmentInfo != null && this.commitmentInfo.isCommitted()) {
-            throw new IllegalStateException("Line item " + lineItemId + " is already committed");
-        }
         this.commitmentInfo = LineCommitmentInfo.inProgress(pickingTaskId);
     }
 

@@ -134,6 +134,23 @@ public class Order {
         updateOrderStatus();
     }
 
+    public void markItemsAsPickingInProgress(List<String> skus, String pickingTaskId) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markPickingInProgress(pickingTaskId);
+            }
+        }
+    }
+
+    public void markItemsAsPickingFailed(List<String> skus, String reason) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markCommitmentFailed(reason);
+            }
+        }
+        updateOrderStatus();
+    }
+
     public boolean isFullyReserved() {
         return orderLineItems != null
                 && !orderLineItems.isEmpty()
