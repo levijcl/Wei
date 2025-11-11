@@ -2,9 +2,8 @@ package com.wei.orchestrator.order.application.eventhandler;
 
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
-import com.wei.orchestrator.wes.domain.event.PickingTaskSubmittedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskFailedEvent;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
-import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskOrigin;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
 import java.util.List;
@@ -18,15 +17,15 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
-public class PickingTaskSubmittedEventHandler {
+public class PickingTaskFailedEventHandler {
 
     private static final Logger logger =
-            LoggerFactory.getLogger(PickingTaskSubmittedEventHandler.class);
+            LoggerFactory.getLogger(PickingTaskFailedEventHandler.class);
 
     private final OrderRepository orderRepository;
     private final PickingTaskRepository pickingTaskRepository;
 
-    public PickingTaskSubmittedEventHandler(
+    public PickingTaskFailedEventHandler(
             OrderRepository orderRepository, PickingTaskRepository pickingTaskRepository) {
         this.orderRepository = orderRepository;
         this.pickingTaskRepository = pickingTaskRepository;
@@ -34,17 +33,27 @@ public class PickingTaskSubmittedEventHandler {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void handlePickingTaskSubmitted(PickingTaskSubmittedEvent event) {
+    public void handlePickingTaskFailed(PickingTaskFailedEvent event) {
         if (event.getOrigin() != TaskOrigin.ORCHESTRATOR_SUBMITTED) {
             logger.info(
-                    "Skipping PickingTaskSubmittedEvent for task {} with origin {}",
+                    "Skipping PickingTaskFailedEvent for task {} with origin {}",
                     event.getTaskId(),
                     event.getOrigin());
             return;
         }
 
+        String orderId = event.getOrderId();
+        if (orderId == null) {
+            logger.warn("PickingTaskFailedEvent has no orderId, skipping");
+            return;
+        }
+
         String taskId = event.getTaskId();
-        logger.info("Handling PickingTaskSubmittedEvent for task: {}", taskId);
+        logger.info(
+                "Handling PickingTaskFailedEvent for task: {}, order: {}, reason: {}",
+                taskId,
+                orderId,
+                event.getReason());
 
         PickingTask pickingTask =
                 pickingTaskRepository
@@ -54,12 +63,6 @@ public class PickingTaskSubmittedEventHandler {
                                         new IllegalStateException(
                                                 "Picking task not found: " + taskId));
 
-        String orderId = pickingTask.getOrderId();
-        if (orderId == null) {
-            logger.warn("Picking task {} has no orderId, skipping", taskId);
-            return;
-        }
-
         Order order =
                 orderRepository
                         .findById(orderId)
@@ -67,15 +70,19 @@ public class PickingTaskSubmittedEventHandler {
                                 () -> new IllegalStateException("Order not found: " + orderId));
 
         List<String> skus =
-                pickingTask.getItems().stream().map(TaskItem::getSku).collect(Collectors.toList());
+                pickingTask.getItems().stream()
+                        .map(item -> item.getSku())
+                        .collect(Collectors.toList());
 
-        order.markItemsAsPickingInProgress(skus, taskId);
+        order.markItemsAsPickingFailed(skus, event.getReason());
 
         orderRepository.save(order);
 
         logger.info(
-                "Successfully marked line items as picking in progress for order: {}, task: {}",
+                "Successfully marked line items as picking failed for order: {}, task: {}, new"
+                        + " status: {}",
                 orderId,
-                taskId);
+                taskId,
+                order.getStatus());
     }
 }

@@ -2,16 +2,14 @@ package com.wei.orchestrator.integration.order.application.eventhandler;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.wei.orchestrator.order.application.eventhandler.PickingTaskSubmittedEventHandler;
+import com.wei.orchestrator.order.application.eventhandler.PickingTaskFailedEventHandler;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
-import com.wei.orchestrator.order.domain.model.valueobject.CommitmentStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
-import com.wei.orchestrator.wes.domain.event.PickingTaskSubmittedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskFailedEvent;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskOrigin;
-import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -27,13 +25,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class PickingTaskSubmittedEventHandlerIntegrationTest {
+class PickingTaskFailedEventHandlerIntegrationTest {
 
     @Autowired private OrderRepository orderRepository;
 
     @Autowired private PickingTaskRepository pickingTaskRepository;
 
-    @Autowired private PickingTaskSubmittedEventHandler eventHandler;
+    @Autowired private PickingTaskFailedEventHandler eventHandler;
 
     @Autowired private TransactionTemplate transactionTemplate;
 
@@ -41,8 +39,9 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
     class EventPublicationAndHandling {
 
         @Test
-        void shouldMarkLineItemAsInProgressWhenTaskSubmitted() {
+        void shouldMarkLineItemAsFailedWhenTaskFailed() {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String reason = "WES timeout error";
 
             Order order =
                     new Order(
@@ -56,36 +55,37 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
             List<TaskItem> items = List.of(TaskItem.of("SKU-001", 10, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask = pickingTaskRepository.save(pickingTask);
-            pickingTask.submitToWes(WesTaskId.of("WES-TASK-001"));
+            pickingTask.markFailed(reason);
             pickingTaskRepository.save(pickingTask);
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             pickingTask.getTaskId(),
-                            "WES-TASK-001",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
-            eventHandler.handlePickingTaskSubmitted(event);
+            eventHandler.handlePickingTaskFailed(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
+            assertTrue(foundOrder.get().getOrderLineItems().get(0).hasCommitmentFailed());
             assertEquals(
-                    CommitmentStatus.IN_PROGRESS,
-                    foundOrder.get().getOrderLineItems().get(0).getCommitmentInfo().getStatus());
-            assertEquals(
-                    pickingTask.getTaskId(),
+                    reason,
                     foundOrder
                             .get()
                             .getOrderLineItems()
                             .get(0)
                             .getCommitmentInfo()
-                            .getWesTransactionId());
+                            .getFailureReason());
         }
 
         @Test
-        void shouldMarkMultipleLineItemsAsInProgressWhenMultipleSkus() {
+        void shouldMarkMultipleLineItemsAsFailedWhenMultipleSkus() {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String reason = "Inventory unavailable";
 
             Order order =
                     new Order(
@@ -106,31 +106,30 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
                             TaskItem.of("SKU-101", 3, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask = pickingTaskRepository.save(pickingTask);
-            pickingTask.submitToWes(WesTaskId.of("WES-TASK-002"));
+            pickingTask.markFailed(reason);
             pickingTaskRepository.save(pickingTask);
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             pickingTask.getTaskId(),
-                            "WES-TASK-002",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
-            eventHandler.handlePickingTaskSubmitted(event);
+            eventHandler.handlePickingTaskFailed(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
-            assertEquals(
-                    CommitmentStatus.IN_PROGRESS,
-                    foundOrder.get().getOrderLineItems().get(0).getCommitmentInfo().getStatus());
-            assertEquals(
-                    CommitmentStatus.IN_PROGRESS,
-                    foundOrder.get().getOrderLineItems().get(1).getCommitmentInfo().getStatus());
+            assertTrue(foundOrder.get().getOrderLineItems().get(0).hasCommitmentFailed());
+            assertTrue(foundOrder.get().getOrderLineItems().get(1).hasCommitmentFailed());
         }
 
         @Test
         void shouldSkipProcessingWhenOriginIsWesDirect() {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String reason = "WES internal error";
 
             Order order =
                     new Order(
@@ -143,89 +142,105 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
 
             List<TaskItem> items = List.of(TaskItem.of("SKU-200", 7, "WH-001"));
             PickingTask pickingTask = PickingTask.createFromWesTask("WES-DIRECT-001", items, 5);
+            pickingTask = pickingTaskRepository.save(pickingTask);
+            pickingTask.markFailed(reason);
             pickingTaskRepository.save(pickingTask);
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             pickingTask.getTaskId(),
                             "WES-DIRECT-001",
+                            null,
                             TaskOrigin.WES_DIRECT,
+                            reason,
                             LocalDateTime.now());
 
-            eventHandler.handlePickingTaskSubmitted(event);
+            eventHandler.handlePickingTaskFailed(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
-            assertNull(foundOrder.get().getOrderLineItems().get(0).getCommitmentInfo());
+            assertFalse(foundOrder.get().getOrderLineItems().get(0).hasCommitmentFailed());
+        }
+
+        @Test
+        void shouldSkipProcessingWhenOrderIdIsNull() {
+            String reason = "WES error";
+
+            List<TaskItem> items = List.of(TaskItem.of("SKU-300", 3, "WH-001"));
+            PickingTask pickingTask = PickingTask.createFromWesTask("WES-TASK-001", items, 5);
+            pickingTask = pickingTaskRepository.save(pickingTask);
+
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
+                            pickingTask.getTaskId(),
+                            "WES-TASK-001",
+                            null,
+                            TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
+                            LocalDateTime.now());
+
+            eventHandler.handlePickingTaskFailed(event);
         }
 
         @Test
         void shouldThrowExceptionWhenPickingTaskNotFound() {
             String taskId = "NON-EXISTENT-TASK";
+            String orderId = "ORDER-001";
+            String reason = "WES error";
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             taskId,
-                            "WES-TASK-003",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
             IllegalStateException exception =
                     assertThrows(
                             IllegalStateException.class,
                             () -> {
-                                eventHandler.handlePickingTaskSubmitted(event);
+                                eventHandler.handlePickingTaskFailed(event);
                             });
 
             assertTrue(exception.getMessage().contains("Picking task not found"));
         }
 
         @Test
-        void shouldSkipProcessingWhenPickingTaskHasNoOrderId() {
-            List<TaskItem> items = List.of(TaskItem.of("SKU-300", 3, "WH-001"));
-            PickingTask pickingTask = PickingTask.createFromWesTask("WES-TASK-004", items, 5);
-            pickingTask = pickingTaskRepository.save(pickingTask);
-
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
-                            pickingTask.getTaskId(),
-                            "WES-TASK-004",
-                            TaskOrigin.ORCHESTRATOR_SUBMITTED,
-                            LocalDateTime.now());
-
-            eventHandler.handlePickingTaskSubmitted(event);
-        }
-
-        @Test
         void shouldThrowExceptionWhenOrderNotFound() {
             String orderId = "NON-EXISTENT-ORDER";
+            String reason = "WES error";
 
             List<TaskItem> items = List.of(TaskItem.of("SKU-400", 2, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask = pickingTaskRepository.save(pickingTask);
-            pickingTask.submitToWes(WesTaskId.of("WES-TASK-005"));
+            pickingTask.markFailed(reason);
             pickingTaskRepository.save(pickingTask);
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             pickingTask.getTaskId(),
-                            "WES-TASK-005",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
             IllegalStateException exception =
                     assertThrows(
                             IllegalStateException.class,
                             () -> {
-                                eventHandler.handlePickingTaskSubmitted(event);
+                                eventHandler.handlePickingTaskFailed(event);
                             });
 
             assertTrue(exception.getMessage().contains("Order not found"));
         }
 
         @Test
-        void shouldMarkOnlyMatchingSkusAsInProgress() {
+        void shouldMarkOnlyMatchingSkusAsFailed() {
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String reason = "Partial picking failure";
 
             Order order =
                     new Order(
@@ -243,24 +258,24 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
             List<TaskItem> items = List.of(TaskItem.of("SKU-500", 1, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask = pickingTaskRepository.save(pickingTask);
-            pickingTask.submitToWes(WesTaskId.of("WES-TASK-006"));
+            pickingTask.markFailed(reason);
             pickingTaskRepository.save(pickingTask);
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             pickingTask.getTaskId(),
-                            "WES-TASK-006",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
-            eventHandler.handlePickingTaskSubmitted(event);
+            eventHandler.handlePickingTaskFailed(event);
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
-            assertEquals(
-                    CommitmentStatus.IN_PROGRESS,
-                    foundOrder.get().getOrderLineItems().get(0).getCommitmentInfo().getStatus());
-            assertNull(foundOrder.get().getOrderLineItems().get(1).getCommitmentInfo());
+            assertTrue(foundOrder.get().getOrderLineItems().get(0).hasCommitmentFailed());
+            assertFalse(foundOrder.get().getOrderLineItems().get(1).hasCommitmentFailed());
         }
     }
 
@@ -270,6 +285,7 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
         @Test
         void shouldCommitOrderUpdateWhenHandlerSucceeds() {
             String orderId = "SUCCESS-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String reason = "WES timeout";
 
             transactionTemplate.execute(
                     status -> {
@@ -289,28 +305,32 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
             List<TaskItem> items = List.of(TaskItem.of("SKU-600", 1, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask = pickingTaskRepository.save(pickingTask);
-            pickingTask.submitToWes(WesTaskId.of("WES-TASK-007"));
+            pickingTask.markFailed(reason);
             pickingTaskRepository.save(pickingTask);
 
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             pickingTask.getTaskId(),
-                            "WES-TASK-007",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
-            eventHandler.handlePickingTaskSubmitted(event);
+            eventHandler.handlePickingTaskFailed(event);
 
             Optional<Order> order = orderRepository.findById(orderId);
             assertTrue(order.isPresent());
+            assertTrue(order.get().getOrderLineItems().get(0).hasCommitmentFailed());
             assertEquals(
-                    CommitmentStatus.IN_PROGRESS,
-                    order.get().getOrderLineItems().get(0).getCommitmentInfo().getStatus());
+                    reason,
+                    order.get().getOrderLineItems().get(0).getCommitmentInfo().getFailureReason());
         }
 
         @Test
         void shouldRollbackWhenHandlerFails() {
             String orderId = "FAIL-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            String reason = "WES error";
 
             transactionTemplate.execute(
                     status -> {
@@ -328,64 +348,26 @@ class PickingTaskSubmittedEventHandlerIntegrationTest {
                     });
 
             String nonExistentTaskId = "NON-EXISTENT-TASK";
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
+            PickingTaskFailedEvent event =
+                    new PickingTaskFailedEvent(
                             nonExistentTaskId,
-                            "WES-TASK-008",
+                            null,
+                            orderId,
                             TaskOrigin.ORCHESTRATOR_SUBMITTED,
+                            reason,
                             LocalDateTime.now());
 
             assertThrows(
                     IllegalStateException.class,
                     () -> {
-                        eventHandler.handlePickingTaskSubmitted(event);
+                        eventHandler.handlePickingTaskFailed(event);
                     });
 
             Optional<Order> order = orderRepository.findById(orderId);
             assertTrue(order.isPresent());
-            assertNull(
-                    order.get().getOrderLineItems().get(0).getCommitmentInfo(),
-                    "Line item should not have commitmentInfo");
-        }
-    }
-
-    @Nested
-    class IdempotencyScenarios {
-
-        @Test
-        void shouldBeIdempotentWhenProcessedMultipleTimes() {
-            String orderId = "IDEMPOTENT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
-
-            Order order =
-                    new Order(
-                            orderId,
-                            List.of(new OrderLineItem("SKU-800", 1, new BigDecimal("10.00"))));
-            order.markReadyForFulfillment();
-            String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
-            order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
-            orderRepository.save(order);
-
-            List<TaskItem> items = List.of(TaskItem.of("SKU-800", 1, "WH-001"));
-            PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
-            pickingTask = pickingTaskRepository.save(pickingTask);
-            pickingTask.submitToWes(WesTaskId.of("WES-TASK-009"));
-            pickingTaskRepository.save(pickingTask);
-
-            PickingTaskSubmittedEvent event =
-                    new PickingTaskSubmittedEvent(
-                            pickingTask.getTaskId(),
-                            "WES-TASK-009",
-                            TaskOrigin.ORCHESTRATOR_SUBMITTED,
-                            LocalDateTime.now());
-
-            eventHandler.handlePickingTaskSubmitted(event);
-            eventHandler.handlePickingTaskSubmitted(event);
-
-            Optional<Order> foundOrder = orderRepository.findById(orderId);
-            assertTrue(foundOrder.isPresent());
-            assertEquals(
-                    CommitmentStatus.IN_PROGRESS,
-                    foundOrder.get().getOrderLineItems().get(0).getCommitmentInfo().getStatus());
+            assertFalse(
+                    order.get().getOrderLineItems().get(0).hasCommitmentFailed(),
+                    "Line item should not have failed commitment");
         }
     }
 }

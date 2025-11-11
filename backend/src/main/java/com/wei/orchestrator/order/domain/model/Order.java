@@ -142,6 +142,15 @@ public class Order {
         }
     }
 
+    public void markItemsAsPickingFailed(List<String> skus, String reason) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markCommitmentFailed(reason);
+            }
+        }
+        updateOrderStatus();
+    }
+
     public boolean isFullyReserved() {
         return orderLineItems != null
                 && !orderLineItems.isEmpty()
