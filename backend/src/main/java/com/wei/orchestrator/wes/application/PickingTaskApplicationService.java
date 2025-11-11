@@ -1,6 +1,7 @@
 package com.wei.orchestrator.wes.application;
 
 import com.wei.orchestrator.wes.application.command.*;
+import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
@@ -29,7 +30,8 @@ public class PickingTaskApplicationService {
     }
 
     @Transactional
-    public String createPickingTaskForOrder(CreatePickingTaskForOrderCommand command) {
+    public WesOperationResultDto createPickingTaskForOrder(
+            CreatePickingTaskForOrderCommand command) {
         List<TaskItem> items =
                 command.getItems().stream()
                         .map(dto -> TaskItem.of(dto.getSku(), dto.getQuantity(), dto.getLocation()))
@@ -40,15 +42,21 @@ public class PickingTaskApplicationService {
 
         PickingTask savedTask = pickingTaskRepository.save(pickingTask);
 
-        WesTaskId wesTaskId = wesPort.submitPickingTask(savedTask);
+        try {
+            WesTaskId wesTaskId = wesPort.submitPickingTask(savedTask);
+            savedTask.submitToWes(wesTaskId);
 
-        savedTask.submitToWes(wesTaskId);
+            pickingTaskRepository.save(savedTask);
+            publishEvents(savedTask);
 
-        pickingTaskRepository.save(savedTask);
+            return WesOperationResultDto.success(savedTask.getTaskId());
+        } catch (Exception e) {
+            savedTask.markFailed(e.getMessage());
+            pickingTaskRepository.save(savedTask);
+            publishEvents(savedTask);
 
-        publishEvents(savedTask);
-
-        return savedTask.getTaskId();
+            return WesOperationResultDto.failure(e.getMessage());
+        }
     }
 
     @Transactional

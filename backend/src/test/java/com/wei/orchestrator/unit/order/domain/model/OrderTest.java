@@ -2,6 +2,7 @@ package com.wei.orchestrator.unit.order.domain.model;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.wei.orchestrator.order.domain.event.OrderReservedEvent;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.ShipmentInfo;
@@ -99,6 +100,19 @@ class OrderTest {
             order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
 
             assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            List<OrderReservedEvent> events =
+                    order.getDomainEvents().stream()
+                            .filter(e -> e instanceof OrderReservedEvent)
+                            .map(e -> (OrderReservedEvent) e)
+                            .toList();
+
+            assertEquals(1, events.size());
+            OrderReservedEvent event = events.get(0);
+            assertEquals("ORDER-005", event.getOrderId());
+            assertEquals(1, event.getReservedLineItemIds().size());
+            assertEquals(lineItemId, event.getReservedLineItemIds().get(0));
+
             assertTrue(order.getOrderLineItems().get(0).isReserved());
             assertEquals(
                     "WH-001",

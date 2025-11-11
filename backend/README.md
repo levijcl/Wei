@@ -662,6 +662,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERV
 **Entity 設計：**
 
 **OrderLineItem（訂單項目）**
+
 - 從單純的資料類別升級為 Entity（具有唯一識別）
 - `lineItemId` (String) - 唯一識別碼
 - `sku` (String) - 商品 SKU
@@ -671,6 +672,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERV
 - `commitmentInfo` (LineCommitmentInfo) - 提交資訊（Value Object）
 
 **Behaviors：**
+
 - `reserveItem(transactionId, externalReservationId, warehouseId)` - 標記為已預約
 - `markReservationFailed(String reason)` - 標記預約失敗
 - `commitItem(String wesTransactionId)` - 標記為已提交
@@ -681,6 +683,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERV
 **Value Objects 設計：**
 
 **LineReservationInfo（訂單項目預約資訊）**
+
 - 封裝與 Inventory Context 互動的預約資訊
 - `status` (ReservationStatus) - 預約狀態：PENDING, RESERVED, FAILED
 - `transactionId` (String) - InventoryTransaction ID
@@ -690,11 +693,13 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERV
 - `reservedAt` (LocalDateTime) - 預約完成時間
 
 **Factory Methods:**
+
 - `LineReservationInfo.reserved(transactionId, externalReservationId, warehouseId)` - 建立成功預約
 - `LineReservationInfo.failed(String reason)` - 建立失敗預約
 - `LineReservationInfo.pending()` - 建立待處理狀態
 
 **LineCommitmentInfo（訂單項目提交資訊）**
+
 - 封裝與 WES Context 互動的提交資訊
 - `status` (CommitmentStatus) - 提交狀態：PENDING, COMMITTED, FAILED
 - `wesTransactionId` (String) - WES 系統交易 ID
@@ -702,6 +707,7 @@ CREATED → SCHEDULED → AWAITING_FULFILLMENT → PARTIALLY_RESERVED → RESERV
 - `committedAt` (LocalDateTime) - 提交完成時間
 
 **Factory Methods:**
+
 - `LineCommitmentInfo.committed(String wesTransactionId)` - 建立成功提交
 - `LineCommitmentInfo.failed(String reason)` - 建立失敗提交
 - `LineCommitmentInfo.pending()` - 建立待處理狀態
@@ -2419,117 +2425,4 @@ class EventMetadata {
 }
 
 AuditRecord --> EventMetadata
-```
-
-## Event 流程圖
-
-```mermaid
-%% DDD Command → Event 流程圖
-flowchart TD
-
-subgraph OrderContext [Order Context]
-  CMD_CreateOrder[Command: CreateOrder]
-  CMD_ConfirmOrder[Command: ConfirmOrder]
-  CMD_CompleteOrder[Command: CompleteOrder]
-  EVT_OrderCreated[Event: OrderCreated]
-  EVT_OrderConfirmed[Event: OrderConfirmed]
-  EVT_OrderCompleted[Event: OrderCompleted]
-
-  CMD_CreateOrder -->|validates and builds| EVT_OrderCreated
-  CMD_ConfirmOrder -->|transitions state| EVT_OrderConfirmed
-  CMD_CompleteOrder -->|finalizes workflow| EVT_OrderCompleted
-end
-
-subgraph InventoryContext [Inventory Context]
-  CMD_CreateInboundTransaction[Command: CreateInboundTransaction]
-  CMD_CreateOutboundTransaction[Command: CreateOutboundTransaction]
-  CMD_AdjustInventory[Command: AdjustInventoryDiscrepancy]
-
-  EVT_InventoryIncreased[Event: InventoryIncreased]
-  EVT_InventoryDecreased[Event: InventoryDecreased]
-  EVT_InventoryAdjusted[Event: InventoryAdjusted]
-  EVT_InventoryTransactionCompleted[Event: InventoryTransactionCompleted]
-
-  CMD_CreateInboundTransaction --> EVT_InventoryIncreased
-  CMD_CreateOutboundTransaction --> EVT_InventoryDecreased
-  CMD_AdjustInventory --> EVT_InventoryAdjusted
-  EVT_InventoryIncreased --> EVT_InventoryTransactionCompleted
-  EVT_InventoryDecreased --> EVT_InventoryTransactionCompleted
-end
-
-subgraph WesContext [WES Context]
-  CMD_CreatePickingTaskForOrder[Command: CreatePickingTaskForOrder]
-  CMD_CreatePickingTaskFromWes[Command: CreatePickingTaskFromWes]
-  CMD_SubmitPickingTask[Command: SubmitPickingTaskToWes]
-  CMD_UpdatePickingTaskStatus[Command: UpdateTaskStatusFromWes]
-  CMD_AdjustPriority[Command: AdjustTaskPriority]
-
-  CMD_CreatePutawayTaskForReturn[Command: CreatePutawayTaskForReturn]
-  CMD_CreatePutawayTaskFromWes[Command: CreatePutawayTaskFromWes]
-  CMD_SubmitPutawayTask[Command: SubmitPutawayTaskToWes]
-
-  EVT_PickingTaskCreated[Event: PickingTaskCreated]
-  EVT_PickingTaskSubmitted[Event: PickingTaskSubmitted]
-  EVT_PickingTaskCompleted[Event: PickingTaskCompleted]
-  EVT_TaskPriorityAdjusted[Event: TaskPriorityAdjusted]
-
-  EVT_PutawayTaskCreated[Event: PutawayTaskCreated]
-  EVT_PutawayTaskSubmitted[Event: PutawayTaskSubmitted]
-  EVT_PutawayTaskCompleted[Event: PutawayTaskCompleted]
-
-  CMD_CreatePickingTaskForOrder --> EVT_PickingTaskCreated
-  CMD_CreatePickingTaskFromWes --> EVT_PickingTaskCreated
-  CMD_SubmitPickingTask --> EVT_PickingTaskSubmitted
-  CMD_UpdatePickingTaskStatus --> EVT_PickingTaskCompleted
-  CMD_AdjustPriority --> EVT_TaskPriorityAdjusted
-
-  CMD_CreatePutawayTaskForReturn --> EVT_PutawayTaskCreated
-  CMD_CreatePutawayTaskFromWes --> EVT_PutawayTaskCreated
-  CMD_SubmitPutawayTask --> EVT_PutawayTaskSubmitted
-end
-
-subgraph ObservationContext [Observation Context]
-  CMD_PollOrderSource[Command: PollOrderSource]
-  CMD_PollInventory[Command: PollInventory]
-  CMD_PollWes[Command: PollWes]
-
-  EVT_OrderSourceObserved[Event: OrderSourceObserved]
-  EVT_InventoryObserved[Event: InventoryObserved]
-  EVT_WesObserved[Event: WesObserved]
-
-  CMD_PollOrderSource --> EVT_OrderSourceObserved
-  CMD_PollInventory --> EVT_InventoryObserved
-  CMD_PollWes --> EVT_WesObserved
-end
-
-subgraph AuditContext [Audit Logging Context]
-  CMD_RecordAudit[Command: RecordAuditLog]
-  EVT_AuditRecorded[Event: AuditRecorded]
-  CMD_RecordAudit --> EVT_AuditRecorded
-end
-
-%% Cross Context Event Flow
-
-%% Order → WES (建立揀貨任務)
-EVT_OrderCreated --> CMD_CreatePickingTaskForOrder
-
-%% WES Observer 發現與同步
-EVT_WesObserved --> CMD_CreatePickingTaskFromWes
-EVT_WesObserved --> CMD_CreatePutawayTaskFromWes
-EVT_WesObserved --> CMD_UpdatePickingTaskStatus
-
-%% PickingTask → Inventory (出庫)
-EVT_PickingTaskCompleted --> CMD_CreateOutboundTransaction
-
-%% PutawayTask → Inventory (入庫)
-EVT_PutawayTaskCompleted --> CMD_CreateInboundTransaction
-
-%% Inventory → Order (完成訂單)
-EVT_InventoryDecreased --> CMD_CompleteOrder
-
-%% Audit Logging
-EVT_InventoryAdjusted --> CMD_RecordAudit
-EVT_OrderCompleted --> CMD_RecordAudit
-EVT_PickingTaskCompleted --> CMD_RecordAudit
-EVT_PutawayTaskCompleted --> CMD_RecordAudit
 ```

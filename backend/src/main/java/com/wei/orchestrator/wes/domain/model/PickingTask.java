@@ -157,6 +157,7 @@ public class PickingTask {
                             this.taskId,
                             this.wesTaskId != null ? this.wesTaskId.getValue() : null,
                             this.orderId,
+                            this.origin,
                             this.failureReason,
                             this.completedAt));
         } else if (newStatus == TaskStatus.CANCELED) {
@@ -216,6 +217,7 @@ public class PickingTask {
                         this.taskId,
                         this.wesTaskId != null ? this.wesTaskId.getValue() : null,
                         this.orderId,
+                        this.origin,
                         reason,
                         this.completedAt));
     }

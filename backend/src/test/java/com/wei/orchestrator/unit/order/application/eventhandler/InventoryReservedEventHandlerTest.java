@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryReservedEventHandlerTest {
@@ -31,6 +32,7 @@ class InventoryReservedEventHandlerTest {
     @Mock private OrderRepository orderRepository;
 
     @Mock private InventoryTransactionRepository inventoryTransactionRepository;
+    @Mock private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks private InventoryReservedEventHandler eventHandler;
 
@@ -62,6 +64,7 @@ class InventoryReservedEventHandlerTest {
             verify(orderRepository, times(1)).findById(orderId);
             verify(inventoryTransactionRepository, times(1)).findById(transactionId);
             verify(orderRepository, times(1)).save(order);
+            verify(applicationEventPublisher).publishEvent(any(Object.class));
 
             assertTrue(order.getOrderLineItems().get(0).isReserved());
             assertEquals(OrderStatus.RESERVED, order.getStatus());

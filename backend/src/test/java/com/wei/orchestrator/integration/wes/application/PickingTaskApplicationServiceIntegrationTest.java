@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.wei.orchestrator.wes.application.PickingTaskApplicationService;
 import com.wei.orchestrator.wes.application.command.*;
 import com.wei.orchestrator.wes.application.command.dto.TaskItemDto;
+import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
 import com.wei.orchestrator.wes.domain.exception.WesPriorityUpdateException;
 import com.wei.orchestrator.wes.domain.exception.WesSubmissionException;
 import com.wei.orchestrator.wes.domain.exception.WesTaskCancellationException;
@@ -46,12 +47,13 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand command =
                     new CreatePickingTaskForOrderCommand("ORDER_INT_001", items, 5);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(command);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command);
 
-            assertNotNull(taskId);
+            assertTrue(result.isSuccess());
             verify(wesPort).submitPickingTask(any(PickingTask.class));
 
-            Optional<PickingTask> foundTask = pickingTaskRepository.findById(taskId);
+            Optional<PickingTask> foundTask = pickingTaskRepository.findById(result.getTaskId());
             assertTrue(foundTask.isPresent());
             assertEquals(TaskStatus.SUBMITTED, foundTask.get().getStatus());
             assertEquals("ORDER_INT_001", foundTask.get().getOrderId());
@@ -69,9 +71,11 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand command =
                     new CreatePickingTaskForOrderCommand("ORDER_INT_002", items, 7);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(command);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command);
 
-            Optional<PickingTask> persistedTask = pickingTaskRepository.findById(taskId);
+            Optional<PickingTask> persistedTask =
+                    pickingTaskRepository.findById(result.getTaskId());
             assertTrue(persistedTask.isPresent());
 
             PickingTask task = persistedTask.get();
@@ -94,12 +98,14 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand command2 =
                     new CreatePickingTaskForOrderCommand("ORDER_INT_003", items2, 6);
 
-            String taskId1 = pickingTaskApplicationService.createPickingTaskForOrder(command1);
-            String taskId2 = pickingTaskApplicationService.createPickingTaskForOrder(command2);
+            WesOperationResultDto result1 =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command1);
+            WesOperationResultDto result2 =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command2);
 
-            assertNotNull(taskId1);
-            assertNotNull(taskId2);
-            assertNotEquals(taskId1, taskId2);
+            assertTrue(result1.isSuccess());
+            assertTrue(result2.isSuccess());
+            assertNotEquals(result1.getTaskId(), result2.getTaskId());
 
             List<PickingTask> tasks = pickingTaskRepository.findByOrderId("ORDER_INT_003");
             assertEquals(2, tasks.size());
@@ -114,9 +120,11 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand command =
                     new CreatePickingTaskForOrderCommand("ORDER_INT_004", items, 3);
 
-            assertThrows(
-                    WesSubmissionException.class,
-                    () -> pickingTaskApplicationService.createPickingTaskForOrder(command));
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command);
+
+            assertFalse(result.isSuccess());
+            assertNotNull(result.getErrorMessage());
         }
     }
 
@@ -132,7 +140,9 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand createCommand =
                     new CreatePickingTaskForOrderCommand("ORDER_LIFECYCLE_001", items, 8);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            String taskId = result.getTaskId();
             Optional<PickingTask> createdTask = pickingTaskRepository.findById(taskId);
             assertTrue(createdTask.isPresent());
             assertEquals(TaskStatus.SUBMITTED, createdTask.get().getStatus());
@@ -164,7 +174,9 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand createCommand =
                     new CreatePickingTaskForOrderCommand("ORDER_CANCEL_001", items, 2);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            String taskId = result.getTaskId();
 
             CancelTaskCommand cancelCommand =
                     new CancelTaskCommand(taskId, "Customer requested cancellation");
@@ -186,7 +198,9 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand createCommand =
                     new CreatePickingTaskForOrderCommand("ORDER_FAIL_001", items, 10);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            String taskId = result.getTaskId();
 
             MarkTaskFailedCommand failCommand = new MarkTaskFailedCommand(taskId, "Item damaged");
             pickingTaskApplicationService.markTaskFailed(failCommand);
@@ -211,7 +225,9 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand createCommand =
                     new CreatePickingTaskForOrderCommand("ORDER_PRIORITY_001", items, 3);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            String taskId = result.getTaskId();
 
             Optional<PickingTask> taskBeforeUpdate = pickingTaskRepository.findById(taskId);
             assertTrue(taskBeforeUpdate.isPresent());
@@ -235,12 +251,16 @@ class PickingTaskApplicationServiceIntegrationTest {
             List<TaskItemDto> items1 = List.of(new TaskItemDto("SKU800", 4, "H-01-01"));
             CreatePickingTaskForOrderCommand command1 =
                     new CreatePickingTaskForOrderCommand("ORDER_PRIORITY_002", items1, 5);
-            String taskId1 = pickingTaskApplicationService.createPickingTaskForOrder(command1);
+            WesOperationResultDto result1 =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command1);
+            String taskId1 = result1.getTaskId();
 
             List<TaskItemDto> items2 = List.of(new TaskItemDto("SKU801", 7, "H-01-02"));
             CreatePickingTaskForOrderCommand command2 =
                     new CreatePickingTaskForOrderCommand("ORDER_PRIORITY_002", items2, 5);
-            String taskId2 = pickingTaskApplicationService.createPickingTaskForOrder(command2);
+            WesOperationResultDto result2 =
+                    pickingTaskApplicationService.createPickingTaskForOrder(command2);
+            String taskId2 = result2.getTaskId();
 
             AdjustTaskPriorityCommand adjustCommand1 = new AdjustTaskPriorityCommand(taskId1, 10);
             pickingTaskApplicationService.adjustTaskPriority(adjustCommand1);
@@ -267,9 +287,11 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand createCommand =
                     new CreatePickingTaskForOrderCommand("ORDER_PRIORITY_FAIL", items, 2);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
 
-            AdjustTaskPriorityCommand adjustCommand = new AdjustTaskPriorityCommand(taskId, 8);
+            AdjustTaskPriorityCommand adjustCommand =
+                    new AdjustTaskPriorityCommand(result.getTaskId(), 8);
 
             assertThrows(
                     WesPriorityUpdateException.class,
@@ -294,9 +316,11 @@ class PickingTaskApplicationServiceIntegrationTest {
             CreatePickingTaskForOrderCommand createCommand =
                     new CreatePickingTaskForOrderCommand("ORDER_CANCEL_FAIL", items, 7);
 
-            String taskId = pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
+            WesOperationResultDto result =
+                    pickingTaskApplicationService.createPickingTaskForOrder(createCommand);
 
-            CancelTaskCommand cancelCommand = new CancelTaskCommand(taskId, "Cancel request");
+            CancelTaskCommand cancelCommand =
+                    new CancelTaskCommand(result.getTaskId(), "Cancel request");
 
             assertThrows(
                     WesTaskCancellationException.class,
