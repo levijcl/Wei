@@ -135,6 +135,8 @@ public class OrderMapper {
                 comInfo = LineCommitmentInfo.committed(entity.getCommitmentWesTransactionId());
             } else if (comStatus == CommitmentStatus.FAILED) {
                 comInfo = LineCommitmentInfo.failed(entity.getCommitmentFailureReason());
+            } else if (comStatus == CommitmentStatus.IN_PROGRESS) {
+                comInfo = LineCommitmentInfo.inProgress(entity.getCommitmentWesTransactionId());
             } else {
                 comInfo = LineCommitmentInfo.pending();
             }

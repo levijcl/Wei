@@ -125,7 +125,8 @@ public class PickingTask {
         this.submittedAt = LocalDateTime.now();
 
         addDomainEvent(
-                new PickingTaskSubmittedEvent(this.taskId, wesTaskId.getValue(), this.submittedAt));
+                new PickingTaskSubmittedEvent(
+                        this.taskId, wesTaskId.getValue(), this.origin, this.submittedAt));
     }
 
     public void updateStatusFromWes(TaskStatus newStatus) {
