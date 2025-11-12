@@ -29,6 +29,7 @@ public class InventoryTransactionMapper {
             entity.setExternalReservationId(domain.getExternalReservationId().getValue());
         }
 
+        entity.setRelatedTransactionId(domain.getRelatedTransactionId());
         entity.setFailureReason(domain.getFailureReason());
         entity.setCreatedAt(domain.getCreatedAt());
         entity.setCompletedAt(domain.getCompletedAt());
@@ -67,6 +68,7 @@ public class InventoryTransactionMapper {
                     ExternalReservationId.of(entity.getExternalReservationId()));
         }
 
+        domain.setRelatedTransactionId(entity.getRelatedTransactionId());
         domain.setFailureReason(entity.getFailureReason());
         domain.setCreatedAt(entity.getCreatedAt());
         domain.setCompletedAt(entity.getCompletedAt());

@@ -1,12 +1,8 @@
 package com.wei.orchestrator.inventory.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
-import com.wei.orchestrator.inventory.application.command.ConsumeReservationCommand;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
-import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
-import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -15,20 +11,17 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-@Component
+@Component("InventoryPickingTaskCompletedEventHandler")
 public class PickingTaskCompletedEventHandler {
 
     private static final Logger logger =
             LoggerFactory.getLogger(PickingTaskCompletedEventHandler.class);
 
     private final InventoryApplicationService inventoryApplicationService;
-    private final InventoryTransactionRepository inventoryTransactionRepository;
 
     public PickingTaskCompletedEventHandler(
-            InventoryApplicationService inventoryApplicationService,
-            InventoryTransactionRepository inventoryTransactionRepository) {
+            InventoryApplicationService inventoryApplicationService) {
         this.inventoryApplicationService = inventoryApplicationService;
-        this.inventoryTransactionRepository = inventoryTransactionRepository;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -43,32 +36,8 @@ public class PickingTaskCompletedEventHandler {
             return;
         }
 
-        List<InventoryTransaction> transactions =
-                inventoryTransactionRepository.findBySourceReferenceId(event.getOrderId());
-
-        InventoryTransaction reservationTransaction =
-                transactions.stream()
-                        .filter(t -> t.getExternalReservationId() != null)
-                        .filter(t -> t.getStatus().canFail())
-                        .findFirst()
-                        .orElse(null);
-
-        if (reservationTransaction == null) {
-            logger.warn(
-                    "No reservation transaction found for order: {}, skipping inventory"
-                            + " consumption",
-                    event.getOrderId());
-            return;
-        }
-
-        ConsumeReservationCommand command =
-                new ConsumeReservationCommand(
-                        reservationTransaction.getTransactionId(),
-                        reservationTransaction.getExternalReservationId().getValue(),
-                        event.getOrderId());
-
         InventoryOperationResultDto result =
-                inventoryApplicationService.consumeReservation(command);
+                inventoryApplicationService.consumeReservationForOrder(event.getOrderId());
 
         if (result.isSuccess()) {
             logger.info(

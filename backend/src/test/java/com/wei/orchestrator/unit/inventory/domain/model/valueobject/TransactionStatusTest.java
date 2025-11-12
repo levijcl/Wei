@@ -19,7 +19,7 @@ class TransactionStatusTest {
     void shouldIdentifyCanProcess() {
         assertTrue(TransactionStatus.PENDING.canProcess());
         assertFalse(TransactionStatus.PROCESSING.canProcess());
-        assertTrue(TransactionStatus.COMPLETED.canProcess());
+        assertFalse(TransactionStatus.COMPLETED.canProcess());
         assertFalse(TransactionStatus.FAILED.canProcess());
     }
 

@@ -151,6 +151,15 @@ public class Order {
         updateOrderStatus();
     }
 
+    public void markItemsAsPickingCompleted(List<String> skus, String wesTaskId) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markPickingCompleted(wesTaskId);
+            }
+        }
+        updateOrderStatus();
+    }
+
     public boolean isFullyReserved() {
         return orderLineItems != null
                 && !orderLineItems.isEmpty()

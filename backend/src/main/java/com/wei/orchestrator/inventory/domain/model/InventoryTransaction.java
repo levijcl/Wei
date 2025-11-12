@@ -17,6 +17,7 @@ public class InventoryTransaction {
     private WarehouseLocation warehouseLocation;
     private List<TransactionLine> transactionLines;
     private ExternalReservationId externalReservationId;
+    private String relatedTransactionId;
     private String failureReason;
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
@@ -96,6 +97,56 @@ public class InventoryTransaction {
                         TransactionType.OUTBOUND,
                         sourceReferenceId,
                         source,
+                        transaction.createdAt));
+
+        return transaction;
+    }
+
+    public static InventoryTransaction createConsumptionTransaction(
+            String orderId,
+            String reservationTransactionId,
+            ExternalReservationId externalReservationId,
+            String warehouseId,
+            List<TransactionLine> lines) {
+
+        if (orderId == null || orderId.isBlank()) {
+            throw new IllegalArgumentException("Order ID cannot be null or blank");
+        }
+        if (reservationTransactionId == null || reservationTransactionId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Reservation transaction ID cannot be null or blank");
+        }
+        if (externalReservationId == null) {
+            throw new IllegalArgumentException("External reservation ID cannot be null");
+        }
+        if (lines == null || lines.isEmpty()) {
+            throw new IllegalArgumentException("Transaction must have at least one line");
+        }
+        for (TransactionLine line : lines) {
+            if (line.getQuantity() <= 0) {
+                throw new IllegalArgumentException(
+                        "Quantity must be positive for consumption transaction");
+            }
+        }
+
+        InventoryTransaction transaction = new InventoryTransaction();
+        transaction.transactionId = UUID.randomUUID().toString();
+        transaction.type = TransactionType.OUTBOUND;
+        transaction.status = TransactionStatus.PENDING;
+        transaction.source = TransactionSource.RESERVATION_CONSUMED;
+        transaction.sourceReferenceId = orderId;
+        transaction.warehouseLocation = WarehouseLocation.of(warehouseId);
+        transaction.transactionLines = new ArrayList<>(lines);
+        transaction.externalReservationId = externalReservationId;
+        transaction.relatedTransactionId = reservationTransactionId;
+        transaction.createdAt = LocalDateTime.now();
+
+        transaction.addDomainEvent(
+                new InventoryTransactionCreatedEvent(
+                        transaction.transactionId,
+                        TransactionType.OUTBOUND,
+                        orderId,
+                        TransactionSource.RESERVATION_CONSUMED,
                         transaction.createdAt));
 
         return transaction;
@@ -375,6 +426,14 @@ public class InventoryTransaction {
 
     public void setExternalReservationId(ExternalReservationId externalReservationId) {
         this.externalReservationId = externalReservationId;
+    }
+
+    public String getRelatedTransactionId() {
+        return relatedTransactionId;
+    }
+
+    public void setRelatedTransactionId(String relatedTransactionId) {
+        this.relatedTransactionId = relatedTransactionId;
     }
 
     public String getFailureReason() {

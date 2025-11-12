@@ -64,39 +64,81 @@ public class InventoryApplicationService {
 
     @Transactional
     public InventoryOperationResultDto consumeReservation(ConsumeReservationCommand command) {
-        InventoryTransaction transaction =
+        InventoryTransaction reservationTransaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
                         .orElseThrow(
                                 () ->
                                         new IllegalArgumentException(
-                                                "Transaction not found: "
+                                                "Reservation transaction not found: "
                                                         + command.getTransactionId()));
 
-        if (transaction.getExternalReservationId() == null) {
+        if (reservationTransaction.getStatus() != TransactionStatus.COMPLETED) {
+            return InventoryOperationResultDto.failure(
+                    "Cannot consume reservation - reservation transaction is not completed");
+        }
+
+        if (reservationTransaction.getExternalReservationId() == null) {
             return InventoryOperationResultDto.failure(
                     "Cannot consume reservation - no external reservation ID");
         }
 
+        InventoryTransaction consumptionTransaction =
+                InventoryTransaction.createConsumptionTransaction(
+                        command.getSourceReferenceId(),
+                        reservationTransaction.getTransactionId(),
+                        reservationTransaction.getExternalReservationId(),
+                        reservationTransaction.getWarehouseLocation().getWarehouseId(),
+                        reservationTransaction.getTransactionLines());
+
+        inventoryTransactionRepository.save(consumptionTransaction);
+
         try {
-            transaction.markAsProcessing();
-            inventoryTransactionRepository.save(transaction);
+            consumptionTransaction.markAsProcessing();
+            inventoryTransactionRepository.save(consumptionTransaction);
 
-            inventoryPort.consumeReservation(transaction.getExternalReservationId());
+            inventoryPort.consumeReservation(consumptionTransaction.getExternalReservationId());
 
-            transaction.complete();
-            inventoryTransactionRepository.save(transaction);
+            consumptionTransaction.complete();
+            inventoryTransactionRepository.save(consumptionTransaction);
 
-            publishEvents(transaction);
+            publishEvents(consumptionTransaction);
 
-            return InventoryOperationResultDto.successVoid();
+            return InventoryOperationResultDto.success(consumptionTransaction.getTransactionId());
 
         } catch (Exception e) {
-            transaction.fail(e.getMessage());
-            inventoryTransactionRepository.save(transaction);
-            publishEvents(transaction);
+            consumptionTransaction.fail(e.getMessage());
+            inventoryTransactionRepository.save(consumptionTransaction);
+            publishEvents(consumptionTransaction);
             return InventoryOperationResultDto.failure(e.getMessage());
         }
+    }
+
+    @Transactional
+    public InventoryOperationResultDto consumeReservationForOrder(String orderId) {
+        List<InventoryTransaction> transactions =
+                inventoryTransactionRepository.findBySourceReferenceId(orderId);
+
+        InventoryTransaction reservationTransaction =
+                transactions.stream()
+                        .filter(t -> t.getExternalReservationId() != null)
+                        .filter(t -> t.getStatus().equals(TransactionStatus.COMPLETED))
+                        .filter(t -> t.getSource().equals(TransactionSource.ORDER_RESERVATION))
+                        .findFirst()
+                        .orElse(null);
+
+        if (reservationTransaction == null) {
+            return InventoryOperationResultDto.failure(
+                    "No valid reservation transaction found for order: " + orderId);
+        }
+
+        ConsumeReservationCommand command =
+                new ConsumeReservationCommand(
+                        reservationTransaction.getTransactionId(),
+                        reservationTransaction.getExternalReservationId().getValue(),
+                        orderId);
+
+        return consumeReservation(command);
     }
 
     @Transactional
