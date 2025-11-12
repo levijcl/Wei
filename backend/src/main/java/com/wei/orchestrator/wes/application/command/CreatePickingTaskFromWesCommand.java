@@ -1,16 +1,29 @@
 package com.wei.orchestrator.wes.application.command;
 
-import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesTaskDto;
-
 public class CreatePickingTaskFromWesCommand {
+    private String wesTaskId;
+    private Integer priority;
 
-    private final WesTaskDto wesTask;
+    public CreatePickingTaskFromWesCommand() {}
 
-    public CreatePickingTaskFromWesCommand(WesTaskDto wesTask) {
-        this.wesTask = wesTask;
+    public CreatePickingTaskFromWesCommand(String wesTaskId, Integer priority) {
+        this.wesTaskId = wesTaskId;
+        this.priority = priority;
     }
 
-    public WesTaskDto getWesTask() {
-        return wesTask;
+    public String getWesTaskId() {
+        return wesTaskId;
+    }
+
+    public void setWesTaskId(String wesTaskId) {
+        this.wesTaskId = wesTaskId;
+    }
+
+    public Integer getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Integer priority) {
+        this.priority = priority;
     }
 }

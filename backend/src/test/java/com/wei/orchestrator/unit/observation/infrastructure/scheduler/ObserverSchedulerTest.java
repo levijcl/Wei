@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 import com.wei.orchestrator.observation.application.OrderObserverApplicationService;
+import com.wei.orchestrator.observation.application.WesObserverApplicationService;
 import com.wei.orchestrator.observation.infrastructure.scheduler.ObserverScheduler;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -23,6 +24,8 @@ class ObserverSchedulerTest {
 
     @Mock private OrderObserverApplicationService orderObserverService;
 
+    @Mock private WesObserverApplicationService wesObserverApplicationService;
+
     @Mock private Lock lock;
 
     @InjectMocks private ObserverScheduler observerScheduler;
@@ -31,105 +34,236 @@ class ObserverSchedulerTest {
     class pollAllObserverTypes {
 
         @Test
-        void shouldAcquireLockAndPollSuccessfully() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
+        void shouldPollBothOrderAndWesObservers() throws InterruptedException {
+            when(lockRegistry.obtain(anyString())).thenReturn(lock);
             when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
 
             observerScheduler.pollAllObserverTypes();
 
             verify(lockRegistry).obtain("order-observer-poll");
-            verify(lock).tryLock(1, TimeUnit.SECONDS);
+            verify(lockRegistry).obtain("wes-observer-poll");
             verify(orderObserverService).pollAllActiveObservers();
-            verify(lock).unlock();
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+            verify(lock, times(2)).unlock();
         }
 
         @Test
-        void shouldSkipPollingWhenLockNotAcquired() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(false);
+        void shouldAcquireLocksForBothObserverTypes() throws InterruptedException {
+            when(lockRegistry.obtain(anyString())).thenReturn(lock);
+            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
 
             observerScheduler.pollAllObserverTypes();
 
             verify(lockRegistry).obtain("order-observer-poll");
-            verify(lock).tryLock(1, TimeUnit.SECONDS);
-            verify(orderObserverService, never()).pollAllActiveObservers();
-            verify(lock, never()).unlock();
+            verify(lockRegistry).obtain("wes-observer-poll");
+            verify(lock, times(2)).tryLock(1, TimeUnit.SECONDS);
         }
 
         @Test
-        void shouldReleaseLockEvenWhenPollingFails() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+        void shouldSkipOrderObserverWhenLockNotAcquired() throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(false);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+
+            observerScheduler.pollAllObserverTypes();
+
+            verify(orderObserverService, never()).pollAllActiveObservers();
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+            verify(orderLock, never()).unlock();
+            verify(wesLock).unlock();
+        }
+
+        @Test
+        void shouldSkipWesObserverWhenLockNotAcquired() throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(false);
+
+            observerScheduler.pollAllObserverTypes();
+
+            verify(orderObserverService).pollAllActiveObservers();
+            verify(wesObserverApplicationService, never()).pollAllActiveObservers();
+            verify(orderLock).unlock();
+            verify(wesLock, never()).unlock();
+        }
+
+        @Test
+        void shouldReleaseLockEvenWhenOrderObserverPollingFails() throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
             doThrow(new RuntimeException("Polling failed"))
                     .when(orderObserverService)
                     .pollAllActiveObservers();
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lockRegistry).obtain("order-observer-poll");
-            verify(lock).tryLock(1, TimeUnit.SECONDS);
-            verify(orderObserverService).pollAllActiveObservers();
-            verify(lock).unlock();
+            verify(orderLock).unlock();
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+            verify(wesLock).unlock();
         }
 
         @Test
-        void shouldHandleInterruptedExceptionDuringLockAcquisition() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenThrow(new InterruptedException());
+        void shouldReleaseLockEvenWhenWesObserverPollingFails() throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            doThrow(new RuntimeException("Polling failed"))
+                    .when(wesObserverApplicationService)
+                    .pollAllActiveObservers();
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lockRegistry).obtain("order-observer-poll");
-            verify(lock).tryLock(1, TimeUnit.SECONDS);
+            verify(orderObserverService).pollAllActiveObservers();
+            verify(orderLock).unlock();
+            verify(wesLock).unlock();
+        }
+
+        @Test
+        void shouldContinueWesPollingWhenOrderObserverFails() throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            doThrow(new RuntimeException("Order observer failed"))
+                    .when(orderObserverService)
+                    .pollAllActiveObservers();
+
+            observerScheduler.pollAllObserverTypes();
+
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+        }
+
+        @Test
+        void shouldHandleInterruptedExceptionDuringOrderObserverLockAcquisition()
+                throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenThrow(new InterruptedException());
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+
+            observerScheduler.pollAllObserverTypes();
+
             verify(orderObserverService, never()).pollAllActiveObservers();
-            verify(lock, never()).unlock();
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+            verify(orderLock, never()).unlock();
+            verify(wesLock).unlock();
+        }
+
+        @Test
+        void shouldHandleInterruptedExceptionDuringWesObserverLockAcquisition()
+                throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenThrow(new InterruptedException());
+
+            observerScheduler.pollAllObserverTypes();
+
+            verify(orderObserverService).pollAllActiveObservers();
+            verify(wesObserverApplicationService, never()).pollAllActiveObservers();
+            verify(orderLock).unlock();
+            verify(wesLock, never()).unlock();
         }
 
         @Test
         void shouldHandleExceptionDuringLockRelease() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
+            when(lockRegistry.obtain(anyString())).thenReturn(lock);
             when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
             doThrow(new RuntimeException("Unlock failed")).when(lock).unlock();
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lockRegistry).obtain("order-observer-poll");
-            verify(lock).tryLock(1, TimeUnit.SECONDS);
             verify(orderObserverService).pollAllActiveObservers();
-            verify(lock).unlock();
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+            verify(lock, times(2)).unlock();
         }
 
         @Test
         void shouldUseTryLockWithCorrectTimeout() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
+            when(lockRegistry.obtain(anyString())).thenReturn(lock);
             when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lock).tryLock(1, TimeUnit.SECONDS);
+            verify(lock, times(2)).tryLock(1, TimeUnit.SECONDS);
         }
 
         @Test
-        void shouldHandleNullPointerExceptionDuringPolling() throws InterruptedException {
-            when(lockRegistry.obtain("order-observer-poll")).thenReturn(lock);
-            when(lock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+        void shouldHandleNullPointerExceptionDuringOrderObserverPolling()
+                throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
             doThrow(new NullPointerException("Unexpected null"))
                     .when(orderObserverService)
                     .pollAllActiveObservers();
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lock).unlock();
+            verify(orderLock).unlock();
+            verify(wesObserverApplicationService).pollAllActiveObservers();
+            verify(wesLock).unlock();
         }
 
         @Test
-        void shouldReleaseMultipleLocksIndependently() throws InterruptedException {
+        void shouldHandleNullPointerExceptionDuringWesObserverPolling()
+                throws InterruptedException {
+            Lock orderLock = mock(Lock.class);
+            Lock wesLock = mock(Lock.class);
+
+            when(lockRegistry.obtain("order-observer-poll")).thenReturn(orderLock);
+            when(lockRegistry.obtain("wes-observer-poll")).thenReturn(wesLock);
+            when(orderLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            when(wesLock.tryLock(1, TimeUnit.SECONDS)).thenReturn(true);
+            doThrow(new NullPointerException("Unexpected null"))
+                    .when(wesObserverApplicationService)
+                    .pollAllActiveObservers();
+
+            observerScheduler.pollAllObserverTypes();
+
+            verify(orderObserverService).pollAllActiveObservers();
+            verify(orderLock).unlock();
+            verify(wesLock).unlock();
+        }
+
+        @Test
+        void shouldReleaseAllLocksIndependently() throws InterruptedException {
             when(lockRegistry.obtain(anyString())).thenReturn(lock);
             when(lock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lock, atLeastOnce()).unlock();
+            verify(lock, times(2)).unlock();
         }
     }
 }
