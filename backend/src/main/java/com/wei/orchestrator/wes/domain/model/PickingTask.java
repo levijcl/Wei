@@ -223,6 +223,24 @@ public class PickingTask {
                         this.completedAt));
     }
 
+    public void markCanceled(String reason) {
+        if (status.isTerminal()) {
+            throw new IllegalStateException("Task is already in terminal status: " + status);
+        }
+
+        this.status = TaskStatus.CANCELED;
+        this.canceledAt = LocalDateTime.now();
+        this.failureReason = reason;
+
+        addDomainEvent(
+                new PickingTaskCanceledEvent(
+                        this.taskId,
+                        this.wesTaskId != null ? this.wesTaskId.getValue() : null,
+                        this.orderId,
+                        reason,
+                        this.canceledAt));
+    }
+
     public void cancel(String reason) {
         if (!status.canCancel()) {
             throw new IllegalStateException("Task cannot be canceled in status: " + status);

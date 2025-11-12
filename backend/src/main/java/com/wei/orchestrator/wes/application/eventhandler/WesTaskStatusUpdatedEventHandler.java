@@ -2,6 +2,9 @@ package com.wei.orchestrator.wes.application.eventhandler;
 
 import com.wei.orchestrator.observation.domain.event.WesTaskStatusUpdatedEvent;
 import com.wei.orchestrator.wes.application.PickingTaskApplicationService;
+import com.wei.orchestrator.wes.application.command.MarkTaskCanceledCommand;
+import com.wei.orchestrator.wes.application.command.MarkTaskCompletedCommand;
+import com.wei.orchestrator.wes.application.command.MarkTaskFailedCommand;
 import com.wei.orchestrator.wes.application.command.UpdateTaskStatusFromWesCommand;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
@@ -39,23 +42,47 @@ public class WesTaskStatusUpdatedEventHandler {
                 wesTaskId,
                 event.getNewStatus());
 
-        String taskId =
+        PickingTask pickingTask =
                 pickingTaskRepository.findByWesTaskId(wesTaskId).stream()
                         .findFirst()
-                        .map(PickingTask::getTaskId)
                         .orElseThrow(
                                 () ->
                                         new IllegalStateException(
                                                 "PickingTask not found for wesTaskId: "
                                                         + wesTaskId));
 
-        UpdateTaskStatusFromWesCommand command =
-                new UpdateTaskStatusFromWesCommand(taskId, event.getNewStatus());
+        String taskId = pickingTask.getTaskId();
 
-        pickingTaskApplicationService.updateTaskStatusFromWes(command);
+        switch (event.getNewStatus()) {
+            case COMPLETED -> {
+                if (pickingTask.getStatus() != event.getNewStatus()) {
+                    MarkTaskCompletedCommand command = new MarkTaskCompletedCommand(taskId);
+                    pickingTaskApplicationService.markTaskCompleted(command);
+                }
+            }
+            case FAILED -> {
+                if (pickingTask.getStatus() != event.getNewStatus()) {
+                    MarkTaskFailedCommand command =
+                            new MarkTaskFailedCommand(taskId, "Failed in WES");
+                    pickingTaskApplicationService.markTaskFailed(command);
+                }
+            }
+            case CANCELED -> {
+                if (pickingTask.getStatus() != event.getNewStatus()) {
+                    MarkTaskCanceledCommand command =
+                            new MarkTaskCanceledCommand(taskId, "Canceled in WES");
+                    pickingTaskApplicationService.markTaskCanceled(command);
+                }
+            }
+            default -> {
+                UpdateTaskStatusFromWesCommand command =
+                        new UpdateTaskStatusFromWesCommand(taskId, event.getNewStatus());
+                pickingTaskApplicationService.updateTaskStatusFromWes(command);
+            }
+        }
 
         logger.info(
-                "Successfully updated task status: taskId={}, wesTaskId={}, newStatus={}",
+                "Successfully handled task status update: taskId={}, wesTaskId={}, newStatus={}",
                 taskId,
                 wesTaskId,
                 event.getNewStatus());

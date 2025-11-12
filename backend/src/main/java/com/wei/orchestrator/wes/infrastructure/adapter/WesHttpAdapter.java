@@ -250,12 +250,9 @@ public class WesHttpAdapter implements WesPort {
 
             List<WesTaskDto> tasks = response.getBody().getTasks();
 
-            logger.debug(
-                    "Polled {} tasks from WES (count: {})",
-                    tasks.size(),
-                    response.getBody().getCount());
-
-            return tasks;
+            return tasks.stream()
+                    .peek(t -> t.setStatus(mapWesStatusToTaskStatus(t.getStatus()).toString()))
+                    .toList();
 
         } catch (HttpClientErrorException.NotFound e) {
             logger.error("WES tasks endpoint not found", e);
@@ -281,7 +278,7 @@ public class WesHttpAdapter implements WesPort {
         }
 
         return switch (wesStatus.toUpperCase()) {
-            case "PENDING" -> TaskStatus.PENDING;
+            case "PENDING" -> TaskStatus.SUBMITTED;
             case "IN_PROGRESS" -> TaskStatus.IN_PROGRESS;
             case "COMPLETED" -> TaskStatus.COMPLETED;
             case "FAILED" -> TaskStatus.FAILED;
