@@ -132,6 +132,23 @@ public class PickingTaskApplicationService {
     }
 
     @Transactional
+    public void markTaskCanceled(MarkTaskCanceledCommand command) {
+        PickingTask pickingTask =
+                pickingTaskRepository
+                        .findById(command.getTaskId())
+                        .orElseThrow(
+                                () ->
+                                        new IllegalArgumentException(
+                                                "Picking task not found: " + command.getTaskId()));
+
+        pickingTask.markCanceled(command.getReason());
+
+        pickingTaskRepository.save(pickingTask);
+
+        publishEvents(pickingTask);
+    }
+
+    @Transactional
     public void cancelTask(CancelTaskCommand command) {
         PickingTask pickingTask =
                 pickingTaskRepository

@@ -1,6 +1,7 @@
 package com.wei.orchestrator.observation.infrastructure.scheduler;
 
 import com.wei.orchestrator.observation.application.OrderObserverApplicationService;
+import com.wei.orchestrator.observation.application.WesObserverApplicationService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import org.slf4j.Logger;
@@ -15,19 +16,26 @@ public class ObserverScheduler {
     private static final Logger logger = LoggerFactory.getLogger(ObserverScheduler.class);
 
     private final LockRegistry lockRegistry;
-    private final OrderObserverApplicationService orderObserverService;
+    private final OrderObserverApplicationService orderObserverApplicationService;
+    private final WesObserverApplicationService wesObserverApplicationService;
 
     public ObserverScheduler(
-            LockRegistry lockRegistry, OrderObserverApplicationService orderObserverService) {
+            LockRegistry lockRegistry,
+            OrderObserverApplicationService orderObserverApplicationService,
+            WesObserverApplicationService wesObserverApplicationService) {
         this.lockRegistry = lockRegistry;
-        this.orderObserverService = orderObserverService;
+        this.orderObserverApplicationService = orderObserverApplicationService;
+        this.wesObserverApplicationService = wesObserverApplicationService;
     }
 
     @Scheduled(fixedDelayString = "${scheduler.observer.fixed-delay:30000}")
     public void pollAllObserverTypes() {
         logger.info("Starting scheduled polling cycle for all observer types");
 
-        pollObserverType("order-observer-poll", orderObserverService::pollAllActiveObservers);
+        pollObserverType(
+                "order-observer-poll", orderObserverApplicationService::pollAllActiveObservers);
+        pollObserverType(
+                "wes-observer-poll", wesObserverApplicationService::pollAllActiveObservers);
 
         logger.info("Polling cycle completed for all observer types");
     }

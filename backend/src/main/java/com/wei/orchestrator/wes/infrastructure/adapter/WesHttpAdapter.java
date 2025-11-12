@@ -233,13 +233,52 @@ public class WesHttpAdapter implements WesPort {
         }
     }
 
+    @Override
+    public List<WesTaskDto> pollAllTasks() {
+        try {
+            String url = wesBaseUrl + "/api/tasks";
+
+            logger.debug("Polling all tasks from WES");
+
+            ResponseEntity<WesTaskListResponse> response =
+                    restTemplate.getForEntity(url, WesTaskListResponse.class);
+
+            if (response.getBody() == null || response.getBody().getTasks() == null) {
+                logger.warn("WES API returned null body or tasks for tasks list");
+                return List.of();
+            }
+
+            List<WesTaskDto> tasks = response.getBody().getTasks();
+
+            return tasks.stream()
+                    .peek(t -> t.setStatus(mapWesStatusToTaskStatus(t.getStatus()).toString()))
+                    .toList();
+
+        } catch (HttpClientErrorException.NotFound e) {
+            logger.error("WES tasks endpoint not found", e);
+            throw new WesOperationException("WES tasks endpoint not found", e);
+
+        } catch (HttpServerErrorException e) {
+            logger.error("WES server error during tasks polling", e);
+            throw new WesOperationException("WES server error during tasks polling", e);
+
+        } catch (ResourceAccessException e) {
+            logger.error("WES communication timeout during tasks polling", e);
+            throw new WesTimeoutException("WES communication timeout during tasks polling", e);
+
+        } catch (RestClientException e) {
+            logger.error("Failed to poll tasks from WES", e);
+            throw new WesOperationException("Failed to poll tasks from WES", e);
+        }
+    }
+
     private TaskStatus mapWesStatusToTaskStatus(String wesStatus) {
         if (wesStatus == null) {
             return TaskStatus.PENDING;
         }
 
         return switch (wesStatus.toUpperCase()) {
-            case "PENDING" -> TaskStatus.PENDING;
+            case "PENDING" -> TaskStatus.SUBMITTED;
             case "IN_PROGRESS" -> TaskStatus.IN_PROGRESS;
             case "COMPLETED" -> TaskStatus.COMPLETED;
             case "FAILED" -> TaskStatus.FAILED;
