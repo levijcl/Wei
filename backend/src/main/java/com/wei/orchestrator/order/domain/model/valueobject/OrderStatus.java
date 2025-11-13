@@ -9,5 +9,6 @@ public enum OrderStatus {
     PARTIALLY_COMMITTED,
     COMMITTED,
     SHIPPED,
-    FAILED_TO_RESERVE
+    FAILED_TO_RESERVE,
+    FAILED_TO_COMMIT
 }

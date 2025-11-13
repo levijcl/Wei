@@ -203,6 +203,12 @@ public class Order {
                 && orderLineItems.stream().anyMatch(OrderLineItem::hasCommitmentFailed);
     }
 
+    public boolean hasAllCommitmentsFailed() {
+        return orderLineItems != null
+                && !orderLineItems.isEmpty()
+                && orderLineItems.stream().allMatch(OrderLineItem::hasCommitmentFailed);
+    }
+
     private OrderLineItem findLineItemById(String lineItemId) {
         if (orderLineItems == null) {
             throw new IllegalStateException("Order has no line items");
@@ -217,9 +223,11 @@ public class Order {
     private void updateOrderStatus() {
         OrderStatus previousStatus = this.status;
 
-        if (isFullyCommitted()) {
+        if (hasAllCommitmentsFailed()) {
+            this.status = OrderStatus.FAILED_TO_COMMIT;
+        } else if (isFullyCommitted()) {
             this.status = OrderStatus.COMMITTED;
-        } else if (isPartiallyCommitted()) {
+        } else if (isPartiallyCommitted() || hasAnyCommitmentFailed()) {
             this.status = OrderStatus.PARTIALLY_COMMITTED;
         } else if (isFullyReserved()) {
             this.status = OrderStatus.RESERVED;
