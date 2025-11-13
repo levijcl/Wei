@@ -7,6 +7,7 @@ import com.wei.orchestrator.observation.domain.model.valueobject.ObservationRule
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.StockSnapshot;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -66,7 +67,9 @@ public class InventoryObserver {
                 dto.getSku(),
                 dto.getAvailableQuantity(),
                 dto.getWarehouseId(),
-                LocalDateTime.parse(dto.getUpdatedAt()));
+                LocalDateTime.parse(
+                        dto.getUpdatedAt(),
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")));
     }
 
     public List<Object> getDomainEvents() {
