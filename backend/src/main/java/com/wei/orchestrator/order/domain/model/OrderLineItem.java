@@ -1,5 +1,6 @@
 package com.wei.orchestrator.order.domain.model;
 
+import com.wei.orchestrator.order.domain.model.valueobject.CommitmentStatus;
 import com.wei.orchestrator.order.domain.model.valueobject.LineCommitmentInfo;
 import com.wei.orchestrator.order.domain.model.valueobject.LineReservationInfo;
 import java.math.BigDecimal;
@@ -44,6 +45,28 @@ public class OrderLineItem {
 
     public void markPickingInProgress(String pickingTaskId) {
         this.commitmentInfo = LineCommitmentInfo.inProgress(pickingTaskId);
+    }
+
+    public void markPickingCompleted(String wesTaskId) {
+        if (this.commitmentInfo == null
+                || !this.commitmentInfo.getStatus().equals(CommitmentStatus.IN_PROGRESS)) {
+            throw new IllegalStateException(
+                    "Cannot mark picking completed for line item "
+                            + lineItemId
+                            + " that is not in progress");
+        }
+        this.commitmentInfo = LineCommitmentInfo.committed(wesTaskId);
+    }
+
+    public void markPickingCanceled(String reason) {
+        if (this.commitmentInfo == null
+                || !this.commitmentInfo.getStatus().equals(CommitmentStatus.IN_PROGRESS)) {
+            throw new IllegalStateException(
+                    "Cannot mark picking canceled for line item "
+                            + lineItemId
+                            + " that is not in progress");
+        }
+        this.commitmentInfo = LineCommitmentInfo.failed(reason);
     }
 
     public void commitItem(String wesTransactionId) {

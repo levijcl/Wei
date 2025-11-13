@@ -38,6 +38,9 @@ public class InventoryTransactionEntity {
     @Column(name = "external_reservation_id", length = 100)
     private String externalReservationId;
 
+    @Column(name = "related_transaction_id", length = 100)
+    private String relatedTransactionId;
+
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
@@ -125,6 +128,14 @@ public class InventoryTransactionEntity {
 
     public void setExternalReservationId(String externalReservationId) {
         this.externalReservationId = externalReservationId;
+    }
+
+    public String getRelatedTransactionId() {
+        return relatedTransactionId;
+    }
+
+    public void setRelatedTransactionId(String relatedTransactionId) {
+        this.relatedTransactionId = relatedTransactionId;
     }
 
     public String getFailureReason() {

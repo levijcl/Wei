@@ -11,7 +11,7 @@ public enum TransactionStatus {
     }
 
     public boolean canProcess() {
-        return this == PENDING || this == COMPLETED;
+        return this == PENDING;
     }
 
     public boolean canComplete() {

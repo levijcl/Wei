@@ -151,6 +151,24 @@ public class Order {
         updateOrderStatus();
     }
 
+    public void markItemsAsPickingCompleted(List<String> skus, String wesTaskId) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markPickingCompleted(wesTaskId);
+            }
+        }
+        updateOrderStatus();
+    }
+
+    public void markItemsAsPickingCanceled(List<String> skus, String reason) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markPickingCanceled(reason);
+            }
+        }
+        updateOrderStatus();
+    }
+
     public boolean isFullyReserved() {
         return orderLineItems != null
                 && !orderLineItems.isEmpty()
@@ -185,6 +203,12 @@ public class Order {
                 && orderLineItems.stream().anyMatch(OrderLineItem::hasCommitmentFailed);
     }
 
+    public boolean hasAllCommitmentsFailed() {
+        return orderLineItems != null
+                && !orderLineItems.isEmpty()
+                && orderLineItems.stream().allMatch(OrderLineItem::hasCommitmentFailed);
+    }
+
     private OrderLineItem findLineItemById(String lineItemId) {
         if (orderLineItems == null) {
             throw new IllegalStateException("Order has no line items");
@@ -199,9 +223,11 @@ public class Order {
     private void updateOrderStatus() {
         OrderStatus previousStatus = this.status;
 
-        if (isFullyCommitted()) {
+        if (hasAllCommitmentsFailed()) {
+            this.status = OrderStatus.FAILED_TO_COMMIT;
+        } else if (isFullyCommitted()) {
             this.status = OrderStatus.COMMITTED;
-        } else if (isPartiallyCommitted()) {
+        } else if (isPartiallyCommitted() || hasAnyCommitmentFailed()) {
             this.status = OrderStatus.PARTIALLY_COMMITTED;
         } else if (isFullyReserved()) {
             this.status = OrderStatus.RESERVED;

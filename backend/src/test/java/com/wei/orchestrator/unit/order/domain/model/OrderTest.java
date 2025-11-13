@@ -719,6 +719,75 @@ class OrderTest {
             order.markAsFailedToReserve("Insufficient inventory");
             assertEquals(OrderStatus.FAILED_TO_RESERVE, order.getStatus());
         }
+
+        @Test
+        void shouldTransitionToFailedToCommitWhenAllItemsPickingFails() {
+            List<OrderLineItem> items = new ArrayList<>();
+            items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+            items.add(new OrderLineItem("SKU-002", 5, new BigDecimal("50.00")));
+            Order order = new Order("ORDER-031", items);
+
+            order.markReadyForFulfillment();
+            String lineItemId1 = order.getOrderLineItems().get(0).getLineItemId();
+            String lineItemId2 = order.getOrderLineItems().get(1).getLineItemId();
+
+            order.reserveLineItem(lineItemId1, "TX-001", "EXT-RES-001", "WH-001");
+            order.reserveLineItem(lineItemId2, "TX-002", "EXT-RES-002", "WH-001");
+            assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            List<String> skus = List.of("SKU-001", "SKU-002");
+            order.markItemsAsPickingInProgress(skus, "TASK-001");
+            assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            order.markItemsAsPickingFailed(skus, "Picking failed");
+            assertEquals(OrderStatus.FAILED_TO_COMMIT, order.getStatus());
+        }
+
+        @Test
+        void shouldTransitionToPartiallyCommittedWhenOneItemPickingFails() {
+            List<OrderLineItem> items = new ArrayList<>();
+            items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+            items.add(new OrderLineItem("SKU-002", 5, new BigDecimal("50.00")));
+            Order order = new Order("ORDER-032", items);
+
+            order.markReadyForFulfillment();
+            String lineItemId1 = order.getOrderLineItems().get(0).getLineItemId();
+            String lineItemId2 = order.getOrderLineItems().get(1).getLineItemId();
+
+            order.reserveLineItem(lineItemId1, "TX-001", "EXT-RES-001", "WH-001");
+            order.reserveLineItem(lineItemId2, "TX-002", "EXT-RES-002", "WH-001");
+            assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            List<String> skus = List.of("SKU-001", "SKU-002");
+            order.markItemsAsPickingInProgress(skus, "TASK-001");
+            assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            order.markItemsAsPickingFailed(List.of("SKU-001"), "Picking failed for SKU-001");
+            assertEquals(OrderStatus.PARTIALLY_COMMITTED, order.getStatus());
+
+            order.markItemsAsPickingCompleted(List.of("SKU-002"), "WES-TASK-001");
+            assertEquals(OrderStatus.PARTIALLY_COMMITTED, order.getStatus());
+        }
+
+        @Test
+        void shouldTransitionToFailedToCommitWhenAllItemsPickingCanceled() {
+            List<OrderLineItem> items = new ArrayList<>();
+            items.add(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00")));
+            Order order = new Order("ORDER-033", items);
+
+            order.markReadyForFulfillment();
+            String lineItemId = order.getOrderLineItems().get(0).getLineItemId();
+
+            order.reserveLineItem(lineItemId, "TX-001", "EXT-RES-001", "WH-001");
+            assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            List<String> skus = List.of("SKU-001");
+            order.markItemsAsPickingInProgress(skus, "TASK-001");
+            assertEquals(OrderStatus.RESERVED, order.getStatus());
+
+            order.markItemsAsPickingCanceled(skus, "Canceled by user");
+            assertEquals(OrderStatus.FAILED_TO_COMMIT, order.getStatus());
+        }
     }
 
     @Nested

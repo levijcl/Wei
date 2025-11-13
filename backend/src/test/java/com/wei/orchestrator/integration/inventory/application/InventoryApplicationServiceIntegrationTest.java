@@ -128,7 +128,7 @@ class InventoryApplicationServiceIntegrationTest {
     class ConsumeReservationTests {
 
         @Test
-        void shouldConsumeReservationAndUpdateTransaction() {
+        void shouldConsumeReservationAndCreateNewTransaction() {
             ReserveInventoryCommand reserveCommand =
                     new ReserveInventoryCommand("ORDER-004", "SKU-004", "WH-01", 20);
 
@@ -139,19 +139,38 @@ class InventoryApplicationServiceIntegrationTest {
             InventoryOperationResultDto reserveResult =
                     inventoryApplicationService.reserveInventory(reserveCommand);
             assertTrue(reserveResult.isSuccess());
-            String transactionId = reserveResult.getTransactionId();
+            String reservationTransactionId = reserveResult.getTransactionId();
 
             doNothing().when(inventoryPort).consumeReservation(externalId);
 
             ConsumeReservationCommand consumeCommand =
-                    new ConsumeReservationCommand(transactionId, "EXT-RES-004", "ORDER-004");
+                    new ConsumeReservationCommand(
+                            reservationTransactionId, "EXT-RES-004", "ORDER-004");
 
-            inventoryApplicationService.consumeReservation(consumeCommand);
+            InventoryOperationResultDto consumeResult =
+                    inventoryApplicationService.consumeReservation(consumeCommand);
 
-            Optional<InventoryTransaction> updatedTransaction =
-                    inventoryTransactionRepository.findById(transactionId);
-            assertTrue(updatedTransaction.isPresent());
-            assertEquals(TransactionStatus.COMPLETED, updatedTransaction.get().getStatus());
+            assertTrue(consumeResult.isSuccess());
+            assertNotNull(consumeResult.getTransactionId());
+            String consumptionTransactionId = consumeResult.getTransactionId();
+
+            Optional<InventoryTransaction> reservationTransaction =
+                    inventoryTransactionRepository.findById(reservationTransactionId);
+            assertTrue(reservationTransaction.isPresent());
+            assertEquals(TransactionStatus.COMPLETED, reservationTransaction.get().getStatus());
+
+            Optional<InventoryTransaction> consumptionTransaction =
+                    inventoryTransactionRepository.findById(consumptionTransactionId);
+            assertTrue(consumptionTransaction.isPresent());
+            assertEquals(TransactionStatus.COMPLETED, consumptionTransaction.get().getStatus());
+            assertEquals(TransactionType.OUTBOUND, consumptionTransaction.get().getType());
+            assertEquals(
+                    reservationTransactionId,
+                    consumptionTransaction.get().getRelatedTransactionId());
+            assertEquals("ORDER-004", consumptionTransaction.get().getSourceReferenceId());
+            assertEquals(
+                    "EXT-RES-004",
+                    consumptionTransaction.get().getExternalReservationId().getValue());
 
             verify(inventoryPort).consumeReservation(externalId);
         }

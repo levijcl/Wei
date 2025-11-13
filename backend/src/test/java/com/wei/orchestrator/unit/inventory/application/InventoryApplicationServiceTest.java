@@ -93,24 +93,26 @@ class InventoryApplicationServiceTest {
     class consumeReservationMethodTest {
         @Test
         void shouldConsumeReservationSuccessfully() {
-            InventoryTransaction transaction =
+            InventoryTransaction reservationTransaction =
                     InventoryTransaction.createReservation("ORDER-001", "SKU-001", "WH-01", 10);
-            transaction.markAsReserved(ExternalReservationId.of("EXT-RES-001"));
-            transaction.setStatus(TransactionStatus.PENDING);
+            reservationTransaction.markAsReserved(ExternalReservationId.of("EXT-RES-001"));
 
             ConsumeReservationCommand command =
                     new ConsumeReservationCommand(
-                            transaction.getTransactionId(), "EXT-RES-001", "ORDER-001");
+                            reservationTransaction.getTransactionId(), "EXT-RES-001", "ORDER-001");
 
-            when(inventoryTransactionRepository.findById(transaction.getTransactionId()))
-                    .thenReturn(Optional.of(transaction));
+            when(inventoryTransactionRepository.findById(reservationTransaction.getTransactionId()))
+                    .thenReturn(Optional.of(reservationTransaction));
             when(inventoryTransactionRepository.save(any(InventoryTransaction.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            inventoryApplicationService.consumeReservation(command);
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.consumeReservation(command);
 
+            assertTrue(result.isSuccess());
+            assertNotNull(result.getTransactionId());
             verify(inventoryPort).consumeReservation(ExternalReservationId.of("EXT-RES-001"));
-            verify(inventoryTransactionRepository, atLeast(2))
+            verify(inventoryTransactionRepository, atLeast(3))
                     .save(any(InventoryTransaction.class));
             verify(eventPublisher, atLeastOnce()).publishEvent(any(Object.class));
         }
@@ -127,6 +129,28 @@ class InventoryApplicationServiceTest {
                     IllegalArgumentException.class,
                     () -> inventoryApplicationService.consumeReservation(command));
 
+            verify(inventoryPort, never()).consumeReservation(any());
+        }
+
+        @Test
+        void shouldFailWhenReservationTransactionNotCompleted() {
+            InventoryTransaction reservationTransaction =
+                    InventoryTransaction.createReservation("ORDER-002", "SKU-002", "WH-01", 10);
+
+            ConsumeReservationCommand command =
+                    new ConsumeReservationCommand(
+                            reservationTransaction.getTransactionId(), "EXT-RES-002", "ORDER-002");
+
+            when(inventoryTransactionRepository.findById(reservationTransaction.getTransactionId()))
+                    .thenReturn(Optional.of(reservationTransaction));
+
+            InventoryOperationResultDto result =
+                    inventoryApplicationService.consumeReservation(command);
+
+            assertFalse(result.isSuccess());
+            assertEquals(
+                    "Cannot consume reservation - reservation transaction is not completed",
+                    result.getErrorMessage());
             verify(inventoryPort, never()).consumeReservation(any());
         }
     }

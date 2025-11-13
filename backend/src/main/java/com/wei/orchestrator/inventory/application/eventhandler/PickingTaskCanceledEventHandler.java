@@ -2,7 +2,7 @@ package com.wei.orchestrator.inventory.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
-import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCanceledEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -11,42 +11,45 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-@Component("InventoryPickingTaskCompletedEventHandler")
-public class PickingTaskCompletedEventHandler {
+@Component("InventoryPickingTaskCanceledEventHandler")
+public class PickingTaskCanceledEventHandler {
 
     private static final Logger logger =
-            LoggerFactory.getLogger(PickingTaskCompletedEventHandler.class);
+            LoggerFactory.getLogger(PickingTaskCanceledEventHandler.class);
 
     private final InventoryApplicationService inventoryApplicationService;
 
-    public PickingTaskCompletedEventHandler(
+    public PickingTaskCanceledEventHandler(
             InventoryApplicationService inventoryApplicationService) {
         this.inventoryApplicationService = inventoryApplicationService;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void handlePickingTaskCompleted(PickingTaskCompletedEvent event) {
-        logger.info("Handling picking task completed event for task: {}", event.getTaskId());
+    public void handlePickingTaskCanceled(PickingTaskCanceledEvent event) {
+        logger.info("Handling picking task canceled event for task: {}", event.getTaskId());
 
         if (event.getOrderId() == null || event.getOrderId().isBlank()) {
             logger.warn(
-                    "Picking task {} has no order ID, skipping inventory consumption",
+                    "Picking task {} has no order ID, skipping inventory release",
                     event.getTaskId());
             return;
         }
 
         InventoryOperationResultDto result =
-                inventoryApplicationService.consumeReservationForOrder(event.getOrderId());
+                inventoryApplicationService.releaseReservationForOrder(
+                        event.getOrderId(), event.getReason());
 
         if (result.isSuccess()) {
             logger.info(
-                    "Successfully consumed reservation for order: {} after picking task: {}",
+                    "Successfully released reservation for order: {} after picking task: {} was"
+                            + " canceled",
                     event.getOrderId(),
                     event.getTaskId());
         } else {
             logger.error(
-                    "Failed to consume reservation for order: {} after picking task: {}, error: {}",
+                    "Failed to release reservation for order: {} after picking task: {} was"
+                            + " canceled, error: {}",
                     event.getOrderId(),
                     event.getTaskId(),
                     result.getErrorMessage());

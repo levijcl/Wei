@@ -473,10 +473,8 @@ class InventoryTransactionTest {
         void shouldThrowExceptionWhenReleasingReservationInFailedStatus() {
             InventoryTransaction transaction =
                     InventoryTransaction.createReservation("ORDER-001", "SKU-001", "WH-01", 10);
-            transaction.markAsProcessing();
             transaction.markAsReserved(ExternalReservationId.of("EXT-RES-001"));
-            transaction.markAsProcessing();
-            transaction.fail("Test failure");
+            transaction.setStatus(TransactionStatus.FAILED);
 
             IllegalStateException exception =
                     assertThrows(
