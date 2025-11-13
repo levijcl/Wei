@@ -334,6 +334,7 @@ public class InventoryTransaction {
         }
 
         this.status = TransactionStatus.COMPLETED;
+        this.setSource(TransactionSource.RESERVATION_RELEASED);
         this.completedAt = LocalDateTime.now();
 
         addDomainEvent(

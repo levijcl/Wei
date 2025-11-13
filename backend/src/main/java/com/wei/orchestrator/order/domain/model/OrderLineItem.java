@@ -58,6 +58,17 @@ public class OrderLineItem {
         this.commitmentInfo = LineCommitmentInfo.committed(wesTaskId);
     }
 
+    public void markPickingCanceled(String reason) {
+        if (this.commitmentInfo == null
+                || !this.commitmentInfo.getStatus().equals(CommitmentStatus.IN_PROGRESS)) {
+            throw new IllegalStateException(
+                    "Cannot mark picking canceled for line item "
+                            + lineItemId
+                            + " that is not in progress");
+        }
+        this.commitmentInfo = LineCommitmentInfo.failed(reason);
+    }
+
     public void commitItem(String wesTransactionId) {
         if (!isReserved()) {
             throw new IllegalStateException("Cannot commit unreserved line item " + lineItemId);

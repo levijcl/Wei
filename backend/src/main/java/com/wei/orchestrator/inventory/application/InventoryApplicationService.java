@@ -142,6 +142,33 @@ public class InventoryApplicationService {
     }
 
     @Transactional
+    public InventoryOperationResultDto releaseReservationForOrder(String orderId, String reason) {
+        List<InventoryTransaction> transactions =
+                inventoryTransactionRepository.findBySourceReferenceId(orderId);
+
+        InventoryTransaction reservationTransaction =
+                transactions.stream()
+                        .filter(t -> t.getExternalReservationId() != null)
+                        .filter(t -> t.getStatus().equals(TransactionStatus.COMPLETED))
+                        .filter(t -> t.getSource().equals(TransactionSource.ORDER_RESERVATION))
+                        .findFirst()
+                        .orElse(null);
+
+        if (reservationTransaction == null) {
+            return InventoryOperationResultDto.failure(
+                    "No valid reservation transaction found for order: " + orderId);
+        }
+
+        ReleaseReservationCommand command =
+                new ReleaseReservationCommand(
+                        reservationTransaction.getTransactionId(),
+                        reservationTransaction.getExternalReservationId().getValue(),
+                        reason);
+
+        return releaseReservation(command);
+    }
+
+    @Transactional
     public InventoryOperationResultDto releaseReservation(ReleaseReservationCommand command) {
         InventoryTransaction transaction =
                 inventoryTransactionRepository

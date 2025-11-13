@@ -160,6 +160,15 @@ public class Order {
         updateOrderStatus();
     }
 
+    public void markItemsAsPickingCanceled(List<String> skus, String reason) {
+        for (OrderLineItem item : orderLineItems) {
+            if (skus.contains(item.getSku())) {
+                item.markPickingCanceled(reason);
+            }
+        }
+        updateOrderStatus();
+    }
+
     public boolean isFullyReserved() {
         return orderLineItems != null
                 && !orderLineItems.isEmpty()

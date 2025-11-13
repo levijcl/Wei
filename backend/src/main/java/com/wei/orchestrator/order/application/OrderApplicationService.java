@@ -96,4 +96,18 @@ public class OrderApplicationService {
         order.getDomainEvents().forEach(eventPublisher::publishEvent);
         order.clearDomainEvents();
     }
+
+    public void markOrderItemsAsPickingCanceled(String orderId, List<String> skus, String reason) {
+        Order order =
+                orderRepository
+                        .findById(orderId)
+                        .orElseThrow(
+                                () -> new IllegalArgumentException("Order not found: " + orderId));
+
+        order.markItemsAsPickingCanceled(skus, reason);
+        orderRepository.save(order);
+
+        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        order.clearDomainEvents();
+    }
 }
