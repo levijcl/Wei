@@ -6,6 +6,7 @@ import com.wei.orchestrator.inventory.domain.exception.ReservationNotFoundExcept
 import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.inventory.infrastructure.adapter.dto.*;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -147,6 +148,36 @@ public class InventoryHttpAdapter implements InventoryPort {
                     "Error adjusting inventory for SKU: " + sku + " - " + e.getMessage(), e);
         } catch (RestClientException e) {
             throw new InventorySystemException("Error communicating with inventory system", e);
+        }
+    }
+
+    @Override
+    public List<InventorySnapshotDto> getInventorySnapshot() throws InventorySystemException {
+        try {
+            String url = inventoryApiBaseUrl + "/api/inventory";
+            ResponseEntity<InventorySnapshotResponse> response =
+                    restTemplate.getForEntity(url, InventorySnapshotResponse.class);
+
+            if (response.getStatusCode().is2xxSuccessful()
+                    && response.getBody() != null
+                    && response.getBody().getSuccess()
+                    && response.getBody().getData() != null) {
+                return response.getBody().getData();
+            }
+
+            throw new InventorySystemException(
+                    "Failed to get inventory snapshot: " + response.getStatusCode());
+
+        } catch (HttpClientErrorException e) {
+            throw new InventorySystemException(
+                    "Error getting inventory snapshot: " + e.getStatusCode(), e);
+        } catch (HttpServerErrorException e) {
+            throw new InventorySystemException(
+                    "Error getting inventory snapshot: " + e.getStatusCode(), e);
+        } catch (RestClientException e) {
+            throw new InventorySystemException("Error communicating with inventory system", e);
+        } catch (Exception e) {
+            throw new InventorySystemException("Unexpected error getting inventory snapshot", e);
         }
     }
 }
