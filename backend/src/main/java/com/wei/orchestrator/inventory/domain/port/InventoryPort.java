@@ -4,6 +4,8 @@ import com.wei.orchestrator.inventory.domain.exception.InsufficientInventoryExce
 import com.wei.orchestrator.inventory.domain.exception.InventorySystemException;
 import com.wei.orchestrator.inventory.domain.exception.ReservationNotFoundException;
 import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
+import com.wei.orchestrator.inventory.infrastructure.adapter.dto.InventorySnapshotDto;
+import java.util.List;
 
 public interface InventoryPort {
 
@@ -22,4 +24,6 @@ public interface InventoryPort {
 
     void adjustInventory(String sku, String warehouseId, int quantityChange, String reason)
             throws InventorySystemException;
+
+    List<InventorySnapshotDto> getInventorySnapshot() throws InventorySystemException;
 }

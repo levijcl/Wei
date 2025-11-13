@@ -1,5 +1,6 @@
 package com.wei.orchestrator.observation.infrastructure.scheduler;
 
+import com.wei.orchestrator.observation.application.InventoryObserverApplicationService;
 import com.wei.orchestrator.observation.application.OrderObserverApplicationService;
 import com.wei.orchestrator.observation.application.WesObserverApplicationService;
 import java.util.concurrent.TimeUnit;
@@ -18,14 +19,17 @@ public class ObserverScheduler {
     private final LockRegistry lockRegistry;
     private final OrderObserverApplicationService orderObserverApplicationService;
     private final WesObserverApplicationService wesObserverApplicationService;
+    private final InventoryObserverApplicationService inventoryObserverApplicationService;
 
     public ObserverScheduler(
             LockRegistry lockRegistry,
             OrderObserverApplicationService orderObserverApplicationService,
-            WesObserverApplicationService wesObserverApplicationService) {
+            WesObserverApplicationService wesObserverApplicationService,
+            InventoryObserverApplicationService inventoryObserverApplicationService) {
         this.lockRegistry = lockRegistry;
         this.orderObserverApplicationService = orderObserverApplicationService;
         this.wesObserverApplicationService = wesObserverApplicationService;
+        this.inventoryObserverApplicationService = inventoryObserverApplicationService;
     }
 
     @Scheduled(fixedDelayString = "${scheduler.observer.fixed-delay:30000}")
@@ -36,7 +40,9 @@ public class ObserverScheduler {
                 "order-observer-poll", orderObserverApplicationService::pollAllActiveObservers);
         pollObserverType(
                 "wes-observer-poll", wesObserverApplicationService::pollAllActiveObservers);
-
+        pollObserverType(
+                "inventory-observer-poll",
+                inventoryObserverApplicationService::pollAllActiveObservers);
         logger.info("Polling cycle completed for all observer types");
     }
 
