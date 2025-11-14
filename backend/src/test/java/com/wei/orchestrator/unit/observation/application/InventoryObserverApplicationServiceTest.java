@@ -15,6 +15,7 @@ import com.wei.orchestrator.observation.domain.model.valueobject.ObservationRule
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.repository.InventoryObserverRepository;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -366,7 +367,9 @@ class InventoryObserverApplicationServiceTest {
             dto.setReservedQuantity(10 + i);
             dto.setAvailableQuantity(90 + i);
             dto.setLocation("A-01-0" + (i + 1));
-            dto.setUpdatedAt(LocalDateTime.now().toString());
+            dto.setUpdatedAt(
+                    LocalDateTime.now()
+                            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'hh:mm:ss.SSS'Z'")));
             dtos.add(dto);
         }
         return dtos;

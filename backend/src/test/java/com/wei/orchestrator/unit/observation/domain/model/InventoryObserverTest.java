@@ -10,6 +10,7 @@ import com.wei.orchestrator.observation.domain.model.InventoryObserver;
 import com.wei.orchestrator.observation.domain.model.valueobject.ObservationRule;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -285,7 +286,9 @@ class InventoryObserverTest {
             dto.setReservedQuantity(10 + i);
             dto.setAvailableQuantity(90 + i);
             dto.setLocation("A-01-0" + (i + 1));
-            dto.setUpdatedAt(LocalDateTime.now().toString());
+            dto.setUpdatedAt(
+                    LocalDateTime.now()
+                            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'hh:mm:ss.SSS'Z'")));
             dtos.add(dto);
         }
         return dtos;

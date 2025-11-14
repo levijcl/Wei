@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
+import com.wei.orchestrator.observation.application.InventoryObserverApplicationService;
 import com.wei.orchestrator.observation.application.OrderObserverApplicationService;
 import com.wei.orchestrator.observation.application.WesObserverApplicationService;
 import com.wei.orchestrator.observation.infrastructure.scheduler.ObserverScheduler;
@@ -26,6 +27,8 @@ class ObserverSchedulerTest {
 
     @Mock private WesObserverApplicationService wesObserverApplicationService;
 
+    @Mock private InventoryObserverApplicationService inventoryObserverApplicationService;
+
     @Mock private Lock lock;
 
     @InjectMocks private ObserverScheduler observerScheduler;
@@ -44,7 +47,7 @@ class ObserverSchedulerTest {
             verify(lockRegistry).obtain("wes-observer-poll");
             verify(orderObserverService).pollAllActiveObservers();
             verify(wesObserverApplicationService).pollAllActiveObservers();
-            verify(lock, times(2)).unlock();
+            verify(lock, times(3)).unlock();
         }
 
         @Test
@@ -56,7 +59,7 @@ class ObserverSchedulerTest {
 
             verify(lockRegistry).obtain("order-observer-poll");
             verify(lockRegistry).obtain("wes-observer-poll");
-            verify(lock, times(2)).tryLock(1, TimeUnit.SECONDS);
+            verify(lock, times(3)).tryLock(1, TimeUnit.SECONDS);
         }
 
         @Test
@@ -201,7 +204,7 @@ class ObserverSchedulerTest {
 
             verify(orderObserverService).pollAllActiveObservers();
             verify(wesObserverApplicationService).pollAllActiveObservers();
-            verify(lock, times(2)).unlock();
+            verify(lock, times(3)).unlock();
         }
 
         @Test
@@ -211,7 +214,7 @@ class ObserverSchedulerTest {
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lock, times(2)).tryLock(1, TimeUnit.SECONDS);
+            verify(lock, times(3)).tryLock(1, TimeUnit.SECONDS);
         }
 
         @Test
@@ -263,7 +266,7 @@ class ObserverSchedulerTest {
 
             observerScheduler.pollAllObserverTypes();
 
-            verify(lock, times(2)).unlock();
+            verify(lock, times(3)).unlock();
         }
     }
 }
