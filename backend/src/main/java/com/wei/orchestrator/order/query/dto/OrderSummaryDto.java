@@ -10,6 +10,7 @@ public class OrderSummaryDto {
     private LocalDateTime scheduledPickupTime;
     private String carrier;
     private String trackingNumber;
+    private String description;
 
     public OrderSummaryDto() {}
 
@@ -24,6 +25,22 @@ public class OrderSummaryDto {
         this.scheduledPickupTime = scheduledPickupTime;
         this.carrier = carrier;
         this.trackingNumber = trackingNumber;
+    }
+
+    public OrderSummaryDto(
+            String orderId,
+            String status,
+            LocalDateTime scheduledPickupTime,
+            String carrier,
+            String trackingNumber,
+            Long lineCount,
+            Long totalQuantity) {
+        this.orderId = orderId;
+        this.status = OrderStatus.valueOf(status);
+        this.scheduledPickupTime = scheduledPickupTime;
+        this.carrier = carrier;
+        this.trackingNumber = trackingNumber;
+        this.description = lineCount + " lines / " + totalQuantity + " pcs";
     }
 
     public String getOrderId() {
@@ -64,5 +81,13 @@ public class OrderSummaryDto {
 
     public void setTrackingNumber(String trackingNumber) {
         this.trackingNumber = trackingNumber;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 }
