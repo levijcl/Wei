@@ -2,6 +2,7 @@ package com.wei.orchestrator.inventory.application;
 
 import com.wei.orchestrator.inventory.application.command.ApplyAdjustmentCommand;
 import com.wei.orchestrator.inventory.application.command.DetectDiscrepancyCommand;
+import com.wei.orchestrator.inventory.application.translator.WesTranslator;
 import com.wei.orchestrator.inventory.domain.model.InventoryAdjustment;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.DiscrepancyLog;
@@ -12,6 +13,7 @@ import com.wei.orchestrator.inventory.domain.repository.InventoryAdjustmentRepos
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.observation.domain.model.valueobject.StockSnapshot;
 import com.wei.orchestrator.wes.domain.port.WesPort;
+import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesInventoryDto;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
@@ -171,27 +173,15 @@ public class InventoryAdjustmentApplicationService {
 
     private List<StockSnapshot> getWesStockSnapshots() {
         try {
-            // TODO: Implement stock snapshot derivation from WES tasks
-            // Current approach:
-            // 1. Call wesPort.pollAllTasks() to get all tasks
-            // 2. Extract SKU and quantity from task items
-            // 3. Calculate stock based on task type and status:
-            //    - COMPLETED PICKING tasks reduce stock
-            //    - COMPLETED PUTAWAY tasks increase stock
-            // 4. Aggregate by SKU and warehouse to create StockSnapshot objects
+            List<WesInventoryDto> wesInventories = wesPort.getInventorySnapshot();
+            logger.info("Fetched {} inventory items from WES", wesInventories.size());
 
-            var tasks = wesPort.pollAllTasks();
-            logger.info("Polled {} tasks from WES for stock snapshot calculation", tasks.size());
-
-            // Placeholder: Return empty list until stock calculation logic is implemented
-            // This requires understanding how to extract item-level data from WesTaskDto
-            // and how to calculate absolute stock levels from task history
-            return new ArrayList<>();
+            return WesTranslator.toStockSnapshots(wesInventories);
 
         } catch (Exception e) {
-            logger.error("Failed to fetch WES tasks for stock snapshots: {}", e.getMessage(), e);
+            logger.error("Failed to fetch WES inventory snapshot: {}", e.getMessage(), e);
             throw new RuntimeException(
-                    "Failed to fetch WES tasks for stock snapshots: " + e.getMessage(), e);
+                    "Failed to fetch WES inventory snapshot: " + e.getMessage(), e);
         }
     }
 

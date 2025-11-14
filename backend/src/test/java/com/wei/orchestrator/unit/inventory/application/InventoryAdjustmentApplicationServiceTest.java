@@ -14,7 +14,7 @@ import com.wei.orchestrator.inventory.domain.repository.InventoryAdjustmentRepos
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.observation.domain.model.valueobject.StockSnapshot;
 import com.wei.orchestrator.wes.domain.port.WesPort;
-import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesTaskDto;
+import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesInventoryDto;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -63,14 +63,14 @@ class InventoryAdjustmentApplicationServiceTest {
             DetectDiscrepancyCommand command =
                     new DetectDiscrepancyCommand("OBSERVER-001", inventorySnapshots);
 
-            when(wesPort.pollAllTasks()).thenReturn(new ArrayList<>());
+            when(wesPort.getInventorySnapshot()).thenReturn(new ArrayList<>());
             when(inventoryAdjustmentRepository.save(any(InventoryAdjustment.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
             String adjustmentId = service.detectDiscrepancy(command);
 
             assertNotNull(adjustmentId);
-            verify(wesPort).pollAllTasks();
+            verify(wesPort).getInventorySnapshot();
             verify(inventoryAdjustmentRepository).save(any(InventoryAdjustment.class));
         }
 
@@ -82,8 +82,8 @@ class InventoryAdjustmentApplicationServiceTest {
             DetectDiscrepancyCommand command =
                     new DetectDiscrepancyCommand("OBSERVER-001", inventorySnapshots);
 
-            List<WesTaskDto> wesTasks = new ArrayList<>();
-            when(wesPort.pollAllTasks()).thenReturn(wesTasks);
+            List<WesInventoryDto> wesInventory = new ArrayList<>();
+            when(wesPort.getInventorySnapshot()).thenReturn(wesInventory);
 
             when(inventoryAdjustmentRepository.save(any(InventoryAdjustment.class)))
                     .thenAnswer(
@@ -95,7 +95,7 @@ class InventoryAdjustmentApplicationServiceTest {
                                 return adj;
                             });
 
-            String adjustmentId = service.detectDiscrepancy(command);
+            service.detectDiscrepancy(command);
 
             verify(inventoryAdjustmentRepository).save(any(InventoryAdjustment.class));
         }
@@ -108,7 +108,7 @@ class InventoryAdjustmentApplicationServiceTest {
             DetectDiscrepancyCommand command =
                     new DetectDiscrepancyCommand("OBSERVER-001", inventorySnapshots);
 
-            when(wesPort.pollAllTasks()).thenReturn(new ArrayList<>());
+            when(wesPort.getInventorySnapshot()).thenReturn(new ArrayList<>());
             when(inventoryAdjustmentRepository.save(any(InventoryAdjustment.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -125,13 +125,19 @@ class InventoryAdjustmentApplicationServiceTest {
             DetectDiscrepancyCommand command =
                     new DetectDiscrepancyCommand("OBSERVER-001", inventorySnapshots);
 
-            when(wesPort.pollAllTasks()).thenThrow(new RuntimeException("WES connection failed"));
+            when(wesPort.getInventorySnapshot())
+                    .thenThrow(new RuntimeException("WES connection failed"));
 
             RuntimeException exception =
                     assertThrows(RuntimeException.class, () -> service.detectDiscrepancy(command));
 
-            assertTrue(exception.getMessage().contains("Failed to fetch WES tasks"));
-            verify(wesPort).pollAllTasks();
+            assertTrue(
+                    exception
+                            .getMessage()
+                            .contains(
+                                    "Failed to fetch WES inventory snapshot: WES connection"
+                                            + " failed"));
+            verify(wesPort).getInventorySnapshot();
         }
     }
 
