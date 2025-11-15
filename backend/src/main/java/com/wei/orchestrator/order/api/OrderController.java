@@ -4,10 +4,20 @@ import com.wei.orchestrator.order.api.dto.CreateOrderRequest;
 import com.wei.orchestrator.order.api.dto.OrderResponse;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
+import com.wei.orchestrator.order.domain.exception.InvalidOrderStatusException;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
+import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
+import com.wei.orchestrator.order.query.OrderQueryService;
+import com.wei.orchestrator.order.query.dto.OrderDetailDto;
+import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
 import jakarta.validation.Valid;
+import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,9 +27,38 @@ import org.springframework.web.bind.annotation.*;
 public class OrderController {
 
     private final OrderApplicationService orderApplicationService;
+    private final OrderQueryService orderQueryService;
 
-    public OrderController(OrderApplicationService orderApplicationService) {
+    public OrderController(
+            OrderApplicationService orderApplicationService, OrderQueryService orderQueryService) {
         this.orderApplicationService = orderApplicationService;
+        this.orderQueryService = orderQueryService;
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<OrderSummaryDto>> getOrders(
+            @RequestParam(required = false) String[] status,
+            @PageableDefault(size = 20) Pageable pageable) {
+
+        List<OrderStatus> statuses = null;
+        try {
+            statuses = Arrays.stream(status).map(OrderStatus::valueOf).collect(Collectors.toList());
+        } catch (IllegalArgumentException e) {
+            String invalidValue =
+                    e.getMessage().contains("No enum constant")
+                            ? e.getMessage().substring(e.getMessage().lastIndexOf(".") + 1)
+                            : Arrays.toString(status);
+            throw new InvalidOrderStatusException(invalidValue);
+        }
+
+        Page<OrderSummaryDto> orders = orderQueryService.getOrders(statuses, pageable);
+        return ResponseEntity.ok(orders);
+    }
+
+    @GetMapping("/{orderId}")
+    public ResponseEntity<OrderDetailDto> getOrderDetail(@PathVariable String orderId) {
+        OrderDetailDto orderDetail = orderQueryService.getOrderDetail(orderId);
+        return ResponseEntity.ok(orderDetail);
     }
 
     @PostMapping

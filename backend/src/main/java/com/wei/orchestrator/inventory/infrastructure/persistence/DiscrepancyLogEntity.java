@@ -34,6 +34,22 @@ public class DiscrepancyLogEntity {
     @Column(name = "detected_at", nullable = false)
     private LocalDateTime detectedAt;
 
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (detectedAt == null) {
+            detectedAt = LocalDateTime.now();
+        }
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
     public Long getId() {
         return id;
     }
@@ -96,5 +112,13 @@ public class DiscrepancyLogEntity {
 
     public void setDetectedAt(LocalDateTime detectedAt) {
         this.detectedAt = detectedAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

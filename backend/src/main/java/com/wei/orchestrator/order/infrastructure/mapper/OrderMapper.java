@@ -103,6 +103,43 @@ public class OrderMapper {
         return entity;
     }
 
+    public static void updateLineItemEntity(OrderLineItemEntity entity, OrderLineItem domain) {
+        // Update business fields but preserve createdAt
+        entity.setSku(domain.getSku());
+        entity.setQuantity(domain.getQuantity());
+        entity.setPrice(domain.getPrice());
+
+        if (domain.getReservationInfo() != null) {
+            LineReservationInfo resInfo = domain.getReservationInfo();
+            entity.setReservationStatus(resInfo.getStatus().name());
+            entity.setReservationTransactionId(resInfo.getTransactionId());
+            entity.setReservationExternalReservationId(resInfo.getExternalReservationId());
+            entity.setReservationWarehouseId(resInfo.getWarehouseId());
+            entity.setReservationFailureReason(resInfo.getFailureReason());
+            entity.setReservationReservedAt(resInfo.getReservedAt());
+        } else {
+            entity.setReservationStatus(null);
+            entity.setReservationTransactionId(null);
+            entity.setReservationExternalReservationId(null);
+            entity.setReservationWarehouseId(null);
+            entity.setReservationFailureReason(null);
+            entity.setReservationReservedAt(null);
+        }
+
+        if (domain.getCommitmentInfo() != null) {
+            LineCommitmentInfo comInfo = domain.getCommitmentInfo();
+            entity.setCommitmentStatus(comInfo.getStatus().name());
+            entity.setCommitmentWesTransactionId(comInfo.getWesTransactionId());
+            entity.setCommitmentFailureReason(comInfo.getFailureReason());
+            entity.setCommitmentCommittedAt(comInfo.getCommittedAt());
+        } else {
+            entity.setCommitmentStatus(null);
+            entity.setCommitmentWesTransactionId(null);
+            entity.setCommitmentFailureReason(null);
+            entity.setCommitmentCommittedAt(null);
+        }
+    }
+
     private static OrderLineItem toLineItemDomain(OrderLineItemEntity entity) {
         OrderLineItem domain =
                 new OrderLineItem(entity.getSku(), entity.getQuantity(), entity.getPrice());

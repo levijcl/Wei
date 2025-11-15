@@ -14,6 +14,7 @@ import com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
+import com.wei.orchestrator.order.query.OrderQueryService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +35,8 @@ class OrderControllerIntegrationTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private OrderApplicationService orderApplicationService;
+
+    @MockitoBean private OrderQueryService orderQueryService;
 
     @Nested
     class createOrder {
