@@ -1,12 +1,15 @@
 package com.wei.orchestrator.order.infrastructure.repository;
 
 import com.wei.orchestrator.order.domain.model.Order;
+import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.order.infrastructure.mapper.OrderMapper;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderEntity;
+import com.wei.orchestrator.order.infrastructure.persistence.OrderLineItemEntity;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Repository;
@@ -59,12 +62,37 @@ public class OrderRepositoryImpl implements OrderRepository {
             entity.setShipmentTrackingNumber(null);
         }
 
-        entity.getOrderLineItems().clear();
+        // Update line items in-place to preserve audit fields (createdAt)
+        Map<String, OrderLineItemEntity> existingItemsMap =
+                entity.getOrderLineItems().stream()
+                        .collect(Collectors.toMap(OrderLineItemEntity::getId, item -> item));
+
+        Map<String, OrderLineItem> newItemsMap =
+                domain.getOrderLineItems().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        com.wei.orchestrator.order.domain.model.OrderLineItem
+                                                ::getLineItemId,
+                                        item -> item));
+
+        // Remove line items that no longer exist
+        entity.getOrderLineItems()
+                .removeIf(existingItem -> !newItemsMap.containsKey(existingItem.getId()));
+
+        // Update existing items or add new ones
         domain.getOrderLineItems()
                 .forEach(
-                        item -> {
-                            var lineItemEntity = OrderMapper.toLineItemEntity(item, entity);
-                            entity.getOrderLineItems().add(lineItemEntity);
+                        domainItem -> {
+                            OrderLineItemEntity existingEntity =
+                                    existingItemsMap.get(domainItem.getLineItemId());
+                            if (existingEntity != null) {
+                                // Update existing entity in-place (preserves createdAt)
+                                OrderMapper.updateLineItemEntity(existingEntity, domainItem);
+                            } else {
+                                // Add new entity (will trigger @PrePersist)
+                                var newEntity = OrderMapper.toLineItemEntity(domainItem, entity);
+                                entity.getOrderLineItems().add(newEntity);
+                            }
                         });
     }
 
