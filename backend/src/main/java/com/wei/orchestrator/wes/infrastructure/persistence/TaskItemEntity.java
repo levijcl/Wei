@@ -1,6 +1,7 @@
 package com.wei.orchestrator.wes.infrastructure.persistence;
 
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "task_items")
@@ -21,7 +22,26 @@ public class TaskItemEntity {
     @Column(name = "location", nullable = false, length = 100)
     private String location;
 
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     public TaskItemEntity() {}
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 
     public TaskItemEntity(String taskId, String sku, Integer quantity, String location) {
         this.taskId = taskId;
@@ -68,5 +88,21 @@ public class TaskItemEntity {
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

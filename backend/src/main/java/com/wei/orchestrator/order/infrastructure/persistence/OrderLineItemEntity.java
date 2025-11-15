@@ -2,6 +2,7 @@ package com.wei.orchestrator.order.infrastructure.persistence;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "order_line_item")
@@ -51,7 +52,26 @@ public class OrderLineItemEntity {
     @Column(name = "commitment_committed_at")
     private java.time.LocalDateTime commitmentCommittedAt;
 
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
     public OrderLineItemEntity() {}
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 
     public String getId() {
         return id;
@@ -171,5 +191,21 @@ public class OrderLineItemEntity {
 
     public void setCommitmentCommittedAt(java.time.LocalDateTime commitmentCommittedAt) {
         this.commitmentCommittedAt = commitmentCommittedAt;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }
