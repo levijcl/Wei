@@ -4,6 +4,7 @@ import com.wei.orchestrator.order.api.dto.CreateOrderRequest;
 import com.wei.orchestrator.order.api.dto.OrderResponse;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
+import com.wei.orchestrator.order.domain.exception.InvalidOrderStatusException;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
@@ -40,8 +41,14 @@ public class OrderController {
             @PageableDefault(size = 20) Pageable pageable) {
 
         List<OrderStatus> statuses = null;
-        if (status != null && status.length > 0) {
+        try {
             statuses = Arrays.stream(status).map(OrderStatus::valueOf).collect(Collectors.toList());
+        } catch (IllegalArgumentException e) {
+            String invalidValue =
+                    e.getMessage().contains("No enum constant")
+                            ? e.getMessage().substring(e.getMessage().lastIndexOf(".") + 1)
+                            : Arrays.toString(status);
+            throw new InvalidOrderStatusException(invalidValue);
         }
 
         Page<OrderSummaryDto> orders = orderQueryService.getOrders(statuses, pageable);
