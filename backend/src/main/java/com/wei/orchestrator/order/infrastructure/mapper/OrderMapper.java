@@ -104,7 +104,6 @@ public class OrderMapper {
     }
 
     public static void updateLineItemEntity(OrderLineItemEntity entity, OrderLineItem domain) {
-        // Update business fields but preserve createdAt
         entity.setSku(domain.getSku());
         entity.setQuantity(domain.getQuantity());
         entity.setPrice(domain.getPrice());

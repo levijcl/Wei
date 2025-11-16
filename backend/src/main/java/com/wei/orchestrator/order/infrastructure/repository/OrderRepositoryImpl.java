@@ -62,7 +62,6 @@ public class OrderRepositoryImpl implements OrderRepository {
             entity.setShipmentTrackingNumber(null);
         }
 
-        // Update line items in-place to preserve audit fields (createdAt)
         Map<String, OrderLineItemEntity> existingItemsMap =
                 entity.getOrderLineItems().stream()
                         .collect(Collectors.toMap(OrderLineItemEntity::getId, item -> item));
@@ -75,21 +74,17 @@ public class OrderRepositoryImpl implements OrderRepository {
                                                 ::getLineItemId,
                                         item -> item));
 
-        // Remove line items that no longer exist
         entity.getOrderLineItems()
                 .removeIf(existingItem -> !newItemsMap.containsKey(existingItem.getId()));
 
-        // Update existing items or add new ones
         domain.getOrderLineItems()
                 .forEach(
                         domainItem -> {
                             OrderLineItemEntity existingEntity =
                                     existingItemsMap.get(domainItem.getLineItemId());
                             if (existingEntity != null) {
-                                // Update existing entity in-place (preserves createdAt)
                                 OrderMapper.updateLineItemEntity(existingEntity, domainItem);
                             } else {
-                                // Add new entity (will trigger @PrePersist)
                                 var newEntity = OrderMapper.toLineItemEntity(domainItem, entity);
                                 entity.getOrderLineItems().add(newEntity);
                             }
