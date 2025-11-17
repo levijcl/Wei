@@ -11,8 +11,6 @@ public interface PickingTaskRepository {
 
     Optional<PickingTask> findById(String taskId);
 
-    List<PickingTask> findAll();
-
     List<PickingTask> findByOrderId(String orderId);
 
     List<PickingTask> findByStatus(TaskStatus status);
@@ -20,10 +18,6 @@ public interface PickingTaskRepository {
     List<PickingTask> findByWesTaskId(String wesTaskId);
 
     void deleteById(String taskId);
-
-    boolean existsById(String taskId);
-
-    boolean existsByWesTaskId(String wesTaskId);
 
     List<String> findAllWesTaskIds();
 

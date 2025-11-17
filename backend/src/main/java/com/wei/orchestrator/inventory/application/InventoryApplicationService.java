@@ -305,8 +305,6 @@ public class InventoryApplicationService {
     }
 
     private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
-        // Create a new TriggerContext where the trigger source is "OrderReadyForFulfillmentEvent"
-        // but keep the same correlationId to maintain the event chain
         TriggerContext newContext =
                 TriggerContext.of(
                         "OrderReadyForFulfillmentEvent",

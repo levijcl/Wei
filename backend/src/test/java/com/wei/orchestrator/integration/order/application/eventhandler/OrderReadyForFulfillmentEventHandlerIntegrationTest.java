@@ -35,7 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class OOrderReadyForFulfillmentEventHandlerIntegrationTestrderReadyForFulfillmentEventHandlerIntegrationTest {
+class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
     @Autowired private ApplicationEventPublisher eventPublisher;
 
@@ -152,9 +152,7 @@ class OOrderReadyForFulfillmentEventHandlerIntegrationTestrderReadyForFulfillmen
             assertTrue(
                     order.isPresent(),
                     "Order should still exist (created in separate transaction)");
-            assertEquals(
-                    OrderStatus.FAILED_TO_RESERVE,
-                    order.get().getStatus());
+            assertEquals(OrderStatus.FAILED_TO_RESERVE, order.get().getStatus());
         }
 
         @Test

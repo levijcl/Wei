@@ -58,20 +58,6 @@ public class PickingTaskRepositoryImpl implements PickingTaskRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PickingTask> findAll() {
-        List<PickingTaskEntity> entities = jpaPickingTaskRepository.findAll();
-        return entities.stream()
-                .map(
-                        entity -> {
-                            List<TaskItemEntity> itemEntities =
-                                    jpaTaskItemRepository.findByTaskId(entity.getTaskId());
-                            return PickingTaskMapper.toDomain(entity, itemEntities);
-                        })
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<PickingTask> findByOrderId(String orderId) {
         List<PickingTaskEntity> entities = jpaPickingTaskRepository.findByOrderId(orderId);
         return entities.stream()
@@ -117,18 +103,6 @@ public class PickingTaskRepositoryImpl implements PickingTaskRepository {
     public void deleteById(String taskId) {
         jpaTaskItemRepository.deleteByTaskId(taskId);
         jpaPickingTaskRepository.deleteById(taskId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existsById(String taskId) {
-        return jpaPickingTaskRepository.existsById(taskId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existsByWesTaskId(String wesTaskId) {
-        return jpaPickingTaskRepository.existsByWesTaskId(wesTaskId);
     }
 
     @Override

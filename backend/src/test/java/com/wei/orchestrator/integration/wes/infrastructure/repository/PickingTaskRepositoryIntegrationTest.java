@@ -131,8 +131,8 @@ class PickingTaskRepositoryIntegrationTest {
         List<PickingTask> pendingTasks = pickingTaskRepository.findByStatus(TaskStatus.PENDING);
         List<PickingTask> submittedTasks = pickingTaskRepository.findByStatus(TaskStatus.SUBMITTED);
 
-        assertTrue(pendingTasks.size() >= 1);
-        assertTrue(submittedTasks.size() >= 1);
+        assertFalse(pendingTasks.isEmpty());
+        assertFalse(submittedTasks.isEmpty());
         assertTrue(pendingTasks.stream().allMatch(t -> t.getStatus() == TaskStatus.PENDING));
         assertTrue(submittedTasks.stream().allMatch(t -> t.getStatus() == TaskStatus.SUBMITTED));
     }
@@ -236,39 +236,13 @@ class PickingTaskRepositoryIntegrationTest {
         task.submitToWes(WesTaskId.of("WES-TASK-CANCEL-TEST"));
         PickingTask savedTask = pickingTaskRepository.save(task);
 
-        PickingTask taskToCancel = savedTask;
-        taskToCancel.cancel("Customer requested cancellation");
-        pickingTaskRepository.save(taskToCancel);
+        savedTask.cancel("Customer requested cancellation");
+        pickingTaskRepository.save(savedTask);
 
         Optional<PickingTask> canceledTask = pickingTaskRepository.findById(savedTask.getTaskId());
         assertTrue(canceledTask.isPresent());
         assertEquals(TaskStatus.CANCELED, canceledTask.get().getStatus());
         assertEquals("Customer requested cancellation", canceledTask.get().getFailureReason());
         assertNotNull(canceledTask.get().getCanceledAt());
-    }
-
-    @Test
-    void shouldCheckExistenceByTaskId() {
-        List<TaskItem> items = new ArrayList<>();
-        items.add(TaskItem.of("SKU-960", 22, "L-12-01"));
-
-        PickingTask task = PickingTask.createForOrder("ORDER-013", items, 4);
-        PickingTask savedTask = pickingTaskRepository.save(task);
-
-        assertTrue(pickingTaskRepository.existsById(savedTask.getTaskId()));
-        assertFalse(pickingTaskRepository.existsById("NON-EXISTENT-ID"));
-    }
-
-    @Test
-    void shouldCheckExistenceByWesTaskId() {
-        List<TaskItem> items = new ArrayList<>();
-        items.add(TaskItem.of("SKU-970", 27, "M-13-01"));
-
-        PickingTask task = PickingTask.createForOrder("ORDER-014", items, 9);
-        task.submitToWes(WesTaskId.of("WES-TASK-EXISTS-CHECK"));
-        pickingTaskRepository.save(task);
-
-        assertTrue(pickingTaskRepository.existsByWesTaskId("WES-TASK-EXISTS-CHECK"));
-        assertFalse(pickingTaskRepository.existsByWesTaskId("NON-EXISTENT-WES-TASK"));
     }
 }
