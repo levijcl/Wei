@@ -4,6 +4,7 @@ import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -77,6 +78,8 @@ public class FulfillmentScheduler {
 
         logger.info("Found {} orders ready for fulfillment", readyOrders.size());
 
+        TriggerContext triggerContext = TriggerContext.scheduled("FulfillmentScheduler");
+
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
 
@@ -91,7 +94,7 @@ public class FulfillmentScheduler {
                                 order.getFulfillmentLeadTime().getMinutes());
 
                         orderApplicationService.initiateFulfillment(
-                                new InitiateFulfillmentCommand(order.getOrderId()));
+                                new InitiateFulfillmentCommand(order.getOrderId()), triggerContext);
 
                         successCount.incrementAndGet();
                         logger.info(

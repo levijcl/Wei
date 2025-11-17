@@ -13,6 +13,7 @@ import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservati
 import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionStatus;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -55,7 +56,7 @@ class InventoryApplicationServiceTest {
                     .thenReturn(externalId);
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -76,7 +77,7 @@ class InventoryApplicationServiceTest {
                     .thenThrow(new InsufficientInventoryException("Insufficient inventory"));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             assertFalse(result.isSuccess());
             assertNotNull(result.getErrorMessage());

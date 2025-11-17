@@ -2,11 +2,12 @@ package com.wei.orchestrator.integration.order.application.eventhandler;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.*;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
-import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
+import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
+import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
@@ -16,7 +17,9 @@ import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.AuditRecord;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
+import com.wei.orchestrator.shared.domain.repository.AuditRecordRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -32,7 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class OrderReadyForFulfillmentEventHandlerIntegrationTest {
+class OOrderReadyForFulfillmentEventHandlerIntegrationTestrderReadyForFulfillmentEventHandlerIntegrationTest {
 
     @Autowired private ApplicationEventPublisher eventPublisher;
 
@@ -44,15 +47,19 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
     @Autowired private TransactionTemplate transactionTemplate;
 
-    @MockitoBean private InventoryApplicationService inventoryApplicationService;
+    @Autowired private AuditRecordRepository auditRecordRepository;
+
+    @Autowired private InventoryApplicationService inventoryApplicationService;
+
+    @MockitoBean private InventoryPort inventoryPort;
 
     @Nested
     class EventPublicationAndHandling {
 
         @Test
         void shouldHandleOrderReadyForFulfillmentEvent() {
-            when(inventoryApplicationService.reserveInventory(any()))
-                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenReturn(ExternalReservationId.of("ext-reservation-123"));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -70,13 +77,13 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
             Optional<Order> foundOrder = orderRepository.findById(orderId);
             assertTrue(foundOrder.isPresent());
-            assertEquals(OrderStatus.AWAITING_FULFILLMENT, foundOrder.get().getStatus());
+            assertEquals(OrderStatus.RESERVED, foundOrder.get().getStatus());
         }
 
         @Test
         void shouldReserveInventoryForOrderLineItems() {
-            when(inventoryApplicationService.reserveInventory(any()))
-                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenReturn(ExternalReservationId.of("ext-reservation-123"));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -99,30 +106,6 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
         }
 
         @Test
-        void shouldDirectlyInvokeHandlerMethod() {
-            when(inventoryApplicationService.reserveInventory(any()))
-                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
-
-            String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
-
-            Order order =
-                    new Order(
-                            orderId,
-                            List.of(new OrderLineItem("SKU-200", 7, new BigDecimal("70.00"))));
-            order.createOrder();
-            order.markReadyForFulfillment();
-            orderRepository.save(order);
-
-            OrderReadyForFulfillmentEvent event = new OrderReadyForFulfillmentEvent(orderId);
-
-            eventHandler.handleOrderReadyForFulfillment(event);
-
-            Optional<Order> foundOrder = orderRepository.findById(orderId);
-            assertTrue(foundOrder.isPresent());
-            assertEquals(OrderStatus.AWAITING_FULFILLMENT, foundOrder.get().getStatus());
-        }
-
-        @Test
         void shouldThrowExceptionWhenOrderNotFound() {
             String orderId = "NON-EXISTENT-ORDER";
             OrderReadyForFulfillmentEvent event = new OrderReadyForFulfillmentEvent(orderId);
@@ -136,33 +119,6 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
 
             assertTrue(exception.getMessage().contains("Order not found"));
             assertTrue(exception.getMessage().contains(orderId));
-        }
-    }
-
-    @Nested
-    class IntegrationWithOrderApplicationService {
-
-        @Test
-        void shouldHandleEventWhenInitiateFulfillmentIsCalled() {
-            when(inventoryApplicationService.reserveInventory(any()))
-                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
-
-            String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
-
-            List<CreateOrderCommand.OrderLineItemDto> items =
-                    List.of(
-                            new CreateOrderCommand.OrderLineItemDto(
-                                    "SKU-300", 2, new BigDecimal("20.00")));
-
-            CreateOrderCommand createCommand = new CreateOrderCommand(orderId, items);
-            orderApplicationService.createOrder(createCommand, TriggerContext.manual());
-
-            InitiateFulfillmentCommand fulfillmentCommand = new InitiateFulfillmentCommand(orderId);
-            orderApplicationService.initiateFulfillment(fulfillmentCommand);
-
-            Optional<Order> order = orderRepository.findById(orderId);
-            assertTrue(order.isPresent());
-            assertEquals(OrderStatus.AWAITING_FULFILLMENT, order.get().getStatus());
         }
     }
 
@@ -184,29 +140,27 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                         return null;
                     });
 
-            doThrow(new RuntimeException("Inventory system down"))
-                    .when(inventoryApplicationService)
-                    .reserveInventory(any());
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenThrow(new RuntimeException("Inventory system down"));
 
             InitiateFulfillmentCommand fulfillmentCommand = new InitiateFulfillmentCommand(orderId);
 
-            orderApplicationService.initiateFulfillment(fulfillmentCommand);
+            orderApplicationService.initiateFulfillment(
+                    fulfillmentCommand, TriggerContext.manual());
 
             Optional<Order> order = orderRepository.findById(orderId);
             assertTrue(
                     order.isPresent(),
                     "Order should still exist (created in separate transaction)");
             assertEquals(
-                    OrderStatus.AWAITING_FULFILLMENT,
-                    order.get().getStatus(),
-                    "Order status should be AWAITING_FULFILLMENT (handler runs after commit, so"
-                            + " initiateFulfillment already committed)");
+                    OrderStatus.FAILED_TO_RESERVE,
+                    order.get().getStatus());
         }
 
         @Test
         void shouldCommitBothTransactionsWhenHandlerSucceeds() {
-            when(inventoryApplicationService.reserveInventory(any()))
-                    .thenReturn(InventoryOperationResultDto.success("reservation-1"));
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenReturn(ExternalReservationId.of("ext-reservation-success"));
 
             String orderId = "SUCCESS-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -222,14 +176,238 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                     });
 
             InitiateFulfillmentCommand fulfillmentCommand = new InitiateFulfillmentCommand(orderId);
-            orderApplicationService.initiateFulfillment(fulfillmentCommand);
+            orderApplicationService.initiateFulfillment(
+                    fulfillmentCommand, TriggerContext.manual());
 
             Optional<Order> order = orderRepository.findById(orderId);
             assertTrue(order.isPresent(), "Order should exist");
             assertEquals(
-                    OrderStatus.AWAITING_FULFILLMENT,
+                    OrderStatus.RESERVED,
                     order.get().getStatus(),
-                    "Order status should be AWAITING_FULFILLMENT");
+                    "Order status should be RESERVED");
+        }
+    }
+
+    @Nested
+    class EventCorrelation {
+
+        @Test
+        void shouldRecordEventsWithSameCorrelationIdWhenInventoryReservedSuccessfully()
+                throws Exception {
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenReturn(ExternalReservationId.of("ext-reservation-123"));
+
+            String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            Order order =
+                    new Order(
+                            orderId,
+                            List.of(new OrderLineItem("SKU-001", 10, new BigDecimal("100.00"))));
+            order.createOrder();
+            order.markReadyForFulfillment();
+            orderRepository.save(order);
+
+            TriggerContext triggerContext =
+                    TriggerContext.of("Scheduled:FulfillmentScheduler", correlationId, null);
+
+            OrderReadyForFulfillmentEvent event =
+                    new OrderReadyForFulfillmentEvent(orderId, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(auditRecords.isEmpty(), "Should have audit records");
+            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+
+            boolean allHaveSameCorrelationId =
+                    auditRecords.stream()
+                            .allMatch(
+                                    record ->
+                                            correlationId.equals(
+                                                    record.getEventMetadata().getCorrelationId()));
+            assertTrue(
+                    allHaveSameCorrelationId,
+                    "All audit records should share the same correlationId");
+
+            List<String> eventNames = auditRecords.stream().map(AuditRecord::getEventName).toList();
+            assertTrue(
+                    eventNames.contains("OrderReadyForFulfillmentEvent"),
+                    "Should audit OrderReadyForFulfillmentEvent");
+            assertTrue(
+                    eventNames.contains("InventoryReservedEvent"),
+                    "Should audit InventoryReservedEvent");
+
+            AuditRecord orderReadyRecord =
+                    auditRecords.stream()
+                            .filter(r -> "OrderReadyForFulfillmentEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Scheduled:FulfillmentScheduler",
+                    orderReadyRecord.getEventMetadata().getTriggerSource(),
+                    "OrderReadyForFulfillmentEvent should have trigger source from scheduler");
+
+            AuditRecord inventoryReservedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "InventoryReservedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "OrderReadyForFulfillmentEvent",
+                    inventoryReservedRecord.getEventMetadata().getTriggerSource(),
+                    "InventoryReservedEvent should have trigger source from"
+                            + " OrderReadyForFulfillmentEvent");
+        }
+
+        @Test
+        void shouldRecordEventsWithSameCorrelationIdWhenReservationFails() throws Exception {
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenThrow(new RuntimeException("Insufficient inventory"));
+
+            String orderId = "FAIL-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            Order order =
+                    new Order(
+                            orderId,
+                            List.of(new OrderLineItem("SKU-002", 5, new BigDecimal("50.00"))));
+            order.createOrder();
+            order.markReadyForFulfillment();
+            orderRepository.save(order);
+
+            TriggerContext triggerContext =
+                    TriggerContext.of("Scheduled:FulfillmentScheduler", correlationId, null);
+
+            OrderReadyForFulfillmentEvent event =
+                    new OrderReadyForFulfillmentEvent(orderId, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(auditRecords.isEmpty(), "Should have audit records");
+            assertEquals(
+                    3,
+                    auditRecords.size(),
+                    "Should have exactly 3 audit records (OrderReady + ReservationFailed +"
+                            + " TransactionFailed)");
+
+            boolean allHaveSameCorrelationId =
+                    auditRecords.stream()
+                            .allMatch(
+                                    record ->
+                                            correlationId.equals(
+                                                    record.getEventMetadata().getCorrelationId()));
+            assertTrue(
+                    allHaveSameCorrelationId,
+                    "All audit records should share the same correlationId");
+
+            List<String> eventNames = auditRecords.stream().map(AuditRecord::getEventName).toList();
+            assertTrue(
+                    eventNames.contains("OrderReadyForFulfillmentEvent"),
+                    "Should audit OrderReadyForFulfillmentEvent");
+            assertTrue(
+                    eventNames.contains("ReservationFailedEvent"),
+                    "Should audit ReservationFailedEvent");
+            assertTrue(
+                    eventNames.contains("InventoryTransactionFailedEvent"),
+                    "Should audit InventoryTransactionFailedEvent");
+
+            AuditRecord orderReadyRecord =
+                    auditRecords.stream()
+                            .filter(r -> "OrderReadyForFulfillmentEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Scheduled:FulfillmentScheduler",
+                    orderReadyRecord.getEventMetadata().getTriggerSource(),
+                    "OrderReadyForFulfillmentEvent should have trigger source from scheduler");
+
+            AuditRecord reservationFailedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "ReservationFailedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "OrderReadyForFulfillmentEvent",
+                    reservationFailedRecord.getEventMetadata().getTriggerSource(),
+                    "ReservationFailedEvent should have trigger source from"
+                            + " OrderReadyForFulfillmentEvent");
+
+            AuditRecord transactionFailedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "InventoryTransactionFailedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "OrderReadyForFulfillmentEvent",
+                    transactionFailedRecord.getEventMetadata().getTriggerSource(),
+                    "InventoryTransactionFailedEvent should have trigger source from"
+                            + " OrderReadyForFulfillmentEvent");
+        }
+
+        @Test
+        void shouldCaptureCorrectContextInAuditRecords() {
+            when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
+                    .thenReturn(ExternalReservationId.of("ext-reservation-456"));
+
+            String orderId = "CONTEXT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            Order order =
+                    new Order(
+                            orderId,
+                            List.of(new OrderLineItem("SKU-003", 3, new BigDecimal("30.00"))));
+            order.createOrder();
+            order.markReadyForFulfillment();
+            orderRepository.save(order);
+
+            TriggerContext triggerContext = TriggerContext.of("TestTrigger", correlationId, null);
+
+            OrderReadyForFulfillmentEvent event =
+                    new OrderReadyForFulfillmentEvent(orderId, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            AuditRecord orderReadyRecord =
+                    auditRecords.stream()
+                            .filter(r -> "OrderReadyForFulfillmentEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Order Context",
+                    orderReadyRecord.getEventMetadata().getContext(),
+                    "OrderReadyForFulfillmentEvent should be in Order Context");
+
+            auditRecords.stream()
+                    .filter(r -> "InventoryReservedEvent".equals(r.getEventName()))
+                    .findFirst()
+                    .ifPresent(
+                            inventoryReservedRecord ->
+                                    assertEquals(
+                                            "Inventory Context",
+                                            inventoryReservedRecord.getEventMetadata().getContext(),
+                                            "InventoryReservedEvent should be in Inventory"
+                                                    + " Context"));
         }
     }
 }

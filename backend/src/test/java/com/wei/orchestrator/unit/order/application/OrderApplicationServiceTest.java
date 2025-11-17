@@ -253,7 +253,7 @@ class OrderApplicationServiceTest {
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
             when(orderRepository.save(any(Order.class))).thenReturn(order);
 
-            orderApplicationService.initiateFulfillment(command);
+            orderApplicationService.initiateFulfillment(command, TriggerContext.manual());
 
             verify(orderRepository, times(1)).findById(orderId);
             verify(orderRepository, times(1)).save(order);
@@ -271,7 +271,8 @@ class OrderApplicationServiceTest {
                     assertThrows(
                             IllegalArgumentException.class,
                             () -> {
-                                orderApplicationService.initiateFulfillment(command);
+                                orderApplicationService.initiateFulfillment(
+                                        command, TriggerContext.manual());
                             });
 
             assertTrue(exception.getMessage().contains("Order not found"));
@@ -290,7 +291,7 @@ class OrderApplicationServiceTest {
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
             when(orderRepository.save(any(Order.class))).thenReturn(order);
 
-            orderApplicationService.initiateFulfillment(command);
+            orderApplicationService.initiateFulfillment(command, TriggerContext.manual());
 
             verify(order, times(1)).getDomainEvents();
             verify(order, times(1)).clearDomainEvents();
@@ -306,7 +307,7 @@ class OrderApplicationServiceTest {
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
             when(orderRepository.save(any(Order.class))).thenReturn(order);
 
-            orderApplicationService.initiateFulfillment(command);
+            orderApplicationService.initiateFulfillment(command, TriggerContext.manual());
 
             verify(order, times(1)).markReadyForFulfillment();
             verify(orderRepository, times(1)).save(order);

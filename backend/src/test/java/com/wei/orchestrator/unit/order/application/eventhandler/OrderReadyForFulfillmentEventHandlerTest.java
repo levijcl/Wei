@@ -43,13 +43,13 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createMockOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-            when(inventoryApplicationService.reserveInventory(any()))
+            when(inventoryApplicationService.reserveInventory(any(), any()))
                     .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             eventHandler.handleOrderReadyForFulfillment(event);
 
             verify(orderRepository, times(1)).findById(orderId);
-            verify(inventoryApplicationService, times(2)).reserveInventory(any());
+            verify(inventoryApplicationService, times(2)).reserveInventory(any(), any());
         }
 
         @Test
@@ -59,7 +59,7 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createMockOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-            when(inventoryApplicationService.reserveInventory(any()))
+            when(inventoryApplicationService.reserveInventory(any(), any()))
                     .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             ArgumentCaptor<ReserveInventoryCommand> commandCaptor =
@@ -67,7 +67,8 @@ class OrderReadyForFulfillmentEventHandlerTest {
 
             eventHandler.handleOrderReadyForFulfillment(event);
 
-            verify(inventoryApplicationService, times(2)).reserveInventory(commandCaptor.capture());
+            verify(inventoryApplicationService, times(2))
+                    .reserveInventory(commandCaptor.capture(), any());
 
             List<ReserveInventoryCommand> commands = commandCaptor.getAllValues();
             assertEquals(2, commands.size());
@@ -100,7 +101,7 @@ class OrderReadyForFulfillmentEventHandlerTest {
             assertTrue(exception.getMessage().contains("Order not found"));
             assertTrue(exception.getMessage().contains(orderId));
             verify(orderRepository, times(1)).findById(orderId);
-            verify(inventoryApplicationService, never()).reserveInventory(any());
+            verify(inventoryApplicationService, never()).reserveInventory(any(), any());
         }
 
         @Test
@@ -112,7 +113,7 @@ class OrderReadyForFulfillmentEventHandlerTest {
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
             doThrow(new RuntimeException("Inventory service unavailable"))
                     .when(inventoryApplicationService)
-                    .reserveInventory(any());
+                    .reserveInventory(any(), any());
 
             RuntimeException exception =
                     assertThrows(
@@ -123,7 +124,7 @@ class OrderReadyForFulfillmentEventHandlerTest {
 
             assertTrue(exception.getMessage().contains("Inventory service unavailable"));
             verify(orderRepository, times(1)).findById(orderId);
-            verify(inventoryApplicationService, times(1)).reserveInventory(any());
+            verify(inventoryApplicationService, times(1)).reserveInventory(any(), any());
         }
 
         @Test
@@ -133,13 +134,13 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createSingleItemOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-            when(inventoryApplicationService.reserveInventory(any()))
+            when(inventoryApplicationService.reserveInventory(any(), any()))
                     .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             eventHandler.handleOrderReadyForFulfillment(event);
 
             verify(orderRepository, times(1)).findById(orderId);
-            verify(inventoryApplicationService, times(1)).reserveInventory(any());
+            verify(inventoryApplicationService, times(1)).reserveInventory(any(), any());
         }
 
         @Test
@@ -149,13 +150,13 @@ class OrderReadyForFulfillmentEventHandlerTest {
             Order order = createMultiItemOrder(orderId);
 
             when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-            when(inventoryApplicationService.reserveInventory(any()))
+            when(inventoryApplicationService.reserveInventory(any(), any()))
                     .thenReturn(InventoryOperationResultDto.success("reservation-1"));
 
             eventHandler.handleOrderReadyForFulfillment(event);
 
             verify(orderRepository, times(1)).findById(orderId);
-            verify(inventoryApplicationService, times(4)).reserveInventory(any());
+            verify(inventoryApplicationService, times(4)).reserveInventory(any(), any());
         }
     }
 

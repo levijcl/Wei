@@ -2,10 +2,14 @@ package com.wei.orchestrator.inventory.application;
 
 import com.wei.orchestrator.inventory.application.command.*;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
+import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
+import com.wei.orchestrator.inventory.domain.event.InventoryTransactionFailedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationFailedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.*;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,7 +33,8 @@ public class InventoryApplicationService {
     }
 
     @Transactional
-    public InventoryOperationResultDto reserveInventory(ReserveInventoryCommand command) {
+    public InventoryOperationResultDto reserveInventory(
+            ReserveInventoryCommand command, TriggerContext triggerContext) {
         InventoryTransaction transaction =
                 InventoryTransaction.createReservation(
                         command.getOrderId(),
@@ -50,14 +55,14 @@ public class InventoryApplicationService {
             transaction.markAsReserved(externalReservationId);
             inventoryTransactionRepository.save(transaction);
 
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext);
 
             return InventoryOperationResultDto.success(transaction.getTransactionId());
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext);
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
@@ -287,5 +292,50 @@ public class InventoryApplicationService {
     private void publishEvents(InventoryTransaction transaction) {
         transaction.getDomainEvents().forEach(eventPublisher::publishEvent);
         transaction.clearDomainEvents();
+    }
+
+    private void publishEventsWithContext(
+            InventoryTransaction transaction, TriggerContext triggerContext) {
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
+        transaction.getDomainEvents().stream()
+                .map(event -> enrichWithTriggerContext(event, context))
+                .forEach(eventPublisher::publishEvent);
+        transaction.clearDomainEvents();
+    }
+
+    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+        // Create a new TriggerContext where the trigger source is "OrderReadyForFulfillmentEvent"
+        // but keep the same correlationId to maintain the event chain
+        TriggerContext newContext =
+                TriggerContext.of(
+                        "OrderReadyForFulfillmentEvent",
+                        triggerContext.getCorrelationId(),
+                        triggerContext.getTriggerBy());
+
+        if (event instanceof InventoryReservedEvent original) {
+            return new InventoryReservedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getExternalReservationId(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof ReservationFailedEvent original) {
+            return new ReservationFailedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof InventoryTransactionFailedEvent original) {
+            return new InventoryTransactionFailedEvent(
+                    original.getTransactionId(),
+                    original.getType(),
+                    original.getSource(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        }
+        return event;
     }
 }

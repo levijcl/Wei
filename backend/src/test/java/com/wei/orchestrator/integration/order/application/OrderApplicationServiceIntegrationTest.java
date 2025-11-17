@@ -324,7 +324,7 @@ class OrderApplicationServiceIntegrationTest {
 
             InitiateFulfillmentCommand initiateCommand =
                     new InitiateFulfillmentCommand("ORDER-INITIATE-001");
-            orderApplicationService.initiateFulfillment(initiateCommand);
+            orderApplicationService.initiateFulfillment(initiateCommand, TriggerContext.manual());
 
             Optional<Order> awaitingOrder = orderRepository.findById("ORDER-INITIATE-001");
             assertTrue(awaitingOrder.isPresent());
@@ -347,7 +347,7 @@ class OrderApplicationServiceIntegrationTest {
 
             InitiateFulfillmentCommand initiateCommand =
                     new InitiateFulfillmentCommand("ORDER-INITIATE-002");
-            orderApplicationService.initiateFulfillment(initiateCommand);
+            orderApplicationService.initiateFulfillment(initiateCommand, TriggerContext.manual());
 
             Optional<Order> awaitingOrder = orderRepository.findById("ORDER-INITIATE-002");
             assertTrue(awaitingOrder.isPresent());
@@ -363,7 +363,8 @@ class OrderApplicationServiceIntegrationTest {
                     assertThrows(
                             IllegalArgumentException.class,
                             () -> {
-                                orderApplicationService.initiateFulfillment(command);
+                                orderApplicationService.initiateFulfillment(
+                                        command, TriggerContext.manual());
                             });
 
             assertTrue(exception.getMessage().contains("Order not found"));

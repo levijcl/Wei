@@ -85,7 +85,8 @@ public class OrderApplicationService {
         return event;
     }
 
-    public void initiateFulfillment(InitiateFulfillmentCommand command) {
+    public void initiateFulfillment(
+            InitiateFulfillmentCommand command, TriggerContext triggerContext) {
         Order order =
                 orderRepository
                         .findById(command.getOrderId())
@@ -97,8 +98,23 @@ public class OrderApplicationService {
         order.markReadyForFulfillment();
         orderRepository.save(order);
 
-        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
+        order.getDomainEvents().stream()
+                .map(event -> enrichOrderReadyForFulfillmentEvent(event, context))
+                .forEach(eventPublisher::publishEvent);
         order.clearDomainEvents();
+    }
+
+    private Object enrichOrderReadyForFulfillmentEvent(
+            Object event, TriggerContext triggerContext) {
+        if (event
+                instanceof
+                com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent original) {
+            return new com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent(
+                    original.getOrderId(), triggerContext);
+        }
+        return event;
     }
 
     public void markOrderItemsAsPickingCompleted(

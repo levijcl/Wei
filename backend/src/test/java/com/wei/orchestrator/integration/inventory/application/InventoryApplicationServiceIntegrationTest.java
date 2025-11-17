@@ -14,6 +14,7 @@ import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionStatus
 import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionType;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Nested;
@@ -51,7 +52,7 @@ class InventoryApplicationServiceIntegrationTest {
                     .thenReturn(externalId);
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -85,7 +86,7 @@ class InventoryApplicationServiceIntegrationTest {
                                     "Insufficient inventory for SKU: SKU-002"));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             assertFalse(result.isSuccess());
             assertNotNull(result.getErrorMessage());
@@ -112,7 +113,7 @@ class InventoryApplicationServiceIntegrationTest {
             when(inventoryPort.createReservation("SKU-003", "WH-01", "ORDER-003", 15))
                     .thenReturn(externalId);
 
-            inventoryApplicationService.reserveInventory(command);
+            inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             List<InventoryTransaction> transactions =
                     inventoryTransactionRepository.findBySourceReferenceId("ORDER-003");
@@ -137,7 +138,8 @@ class InventoryApplicationServiceIntegrationTest {
                     .thenReturn(externalId);
 
             InventoryOperationResultDto reserveResult =
-                    inventoryApplicationService.reserveInventory(reserveCommand);
+                    inventoryApplicationService.reserveInventory(
+                            reserveCommand, TriggerContext.manual());
             assertTrue(reserveResult.isSuccess());
             String reservationTransactionId = reserveResult.getTransactionId();
 
@@ -201,7 +203,8 @@ class InventoryApplicationServiceIntegrationTest {
                     .thenReturn(externalId);
 
             InventoryOperationResultDto reserveResult =
-                    inventoryApplicationService.reserveInventory(reserveCommand);
+                    inventoryApplicationService.reserveInventory(
+                            reserveCommand, TriggerContext.manual());
             assertTrue(reserveResult.isSuccess());
             String transactionId = reserveResult.getTransactionId();
 
