@@ -1,5 +1,7 @@
 package com.wei.orchestrator.shared.domain.model.valueobject;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -11,8 +13,12 @@ public final class TriggerContext {
     private final LocalDateTime timestamp;
     private final String triggerBy;
 
+    @JsonCreator
     private TriggerContext(
-            String triggerSource, UUID correlationId, LocalDateTime timestamp, String triggerBy) {
+            @JsonProperty("triggerSource") String triggerSource,
+            @JsonProperty("correlationId") UUID correlationId,
+            @JsonProperty("timestamp") LocalDateTime timestamp,
+            @JsonProperty("triggerBy") String triggerBy) {
         if (triggerSource == null || triggerSource.isBlank()) {
             throw new IllegalArgumentException("Trigger source cannot be null or blank");
         }

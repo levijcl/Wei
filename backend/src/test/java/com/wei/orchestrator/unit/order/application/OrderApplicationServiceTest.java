@@ -15,6 +15,7 @@ import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.model.valueobject.ScheduledPickupTime;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.order.domain.service.OrderDomainService;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -57,7 +58,8 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals("ORDER-001", createdOrder.getOrderId());
@@ -92,7 +94,8 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertEquals("SKU-100", createdOrder.getOrderLineItems().get(0).getSku());
             assertEquals(3, createdOrder.getOrderLineItems().get(0).getQuantity());
@@ -110,7 +113,7 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            orderApplicationService.createOrder(command);
+            orderApplicationService.createOrder(command, TriggerContext.manual());
 
             verify(orderRepository, times(1)).save(any(Order.class));
             verifyNoMoreInteractions(orderRepository);
@@ -132,7 +135,8 @@ class OrderApplicationServiceTest {
                     assertThrows(
                             OrderAlreadyExistsException.class,
                             () -> {
-                                orderApplicationService.createOrder(command);
+                                orderApplicationService.createOrder(
+                                        command, TriggerContext.manual());
                             });
 
             assertTrue(exception.getMessage().contains("ORDER-005"));
@@ -155,7 +159,8 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals("ORDER-006", createdOrder.getOrderId());
@@ -183,7 +188,8 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             verify(orderDomainService, times(1))
@@ -206,7 +212,7 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            orderApplicationService.createOrder(command);
+            orderApplicationService.createOrder(command, TriggerContext.manual());
 
             verify(orderDomainService, never())
                     .processOrderScheduling(
@@ -228,7 +234,7 @@ class OrderApplicationServiceTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            orderApplicationService.createOrder(command);
+            orderApplicationService.createOrder(command, TriggerContext.manual());
 
             verify(orderRepository, times(1)).save(any(Order.class));
             verify(eventPublisher, never()).publishEvent(any(Object.class));

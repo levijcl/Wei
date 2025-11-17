@@ -59,7 +59,7 @@ class OrderControllerIntegrationTest {
                                     new OrderLineItem("SKU-001", 2, new BigDecimal("100.00")),
                                     new OrderLineItem("SKU-002", 1, new BigDecimal("50.00"))));
 
-            when(orderApplicationService.createOrder(any())).thenReturn(mockOrder);
+            when(orderApplicationService.createOrder(any(), any())).thenReturn(mockOrder);
 
             mockMvc.perform(
                             post("/api/orders")
@@ -185,7 +185,7 @@ class OrderControllerIntegrationTest {
                     createMockOrder(
                             "ORDER-003", List.of(new OrderLineItem("SKU-001", 1, BigDecimal.ZERO)));
 
-            when(orderApplicationService.createOrder(any())).thenReturn(mockOrder);
+            when(orderApplicationService.createOrder(any(), any())).thenReturn(mockOrder);
 
             mockMvc.perform(
                             post("/api/orders")
@@ -216,7 +216,7 @@ class OrderControllerIntegrationTest {
                                     new OrderLineItem("SKU-002", 2, new BigDecimal("20.00")),
                                     new OrderLineItem("SKU-003", 3, new BigDecimal("30.00"))));
 
-            when(orderApplicationService.createOrder(any())).thenReturn(mockOrder);
+            when(orderApplicationService.createOrder(any(), any())).thenReturn(mockOrder);
 
             mockMvc.perform(
                             post("/api/orders")
@@ -235,7 +235,7 @@ class OrderControllerIntegrationTest {
                                     new CreateOrderRequest.OrderLineItemDto(
                                             "SKU-001", 2, new BigDecimal("100.00"))));
 
-            when(orderApplicationService.createOrder(any()))
+            when(orderApplicationService.createOrder(any(), any()))
                     .thenThrow(
                             new OrderAlreadyExistsException(
                                     "Order with ID ORDER-001 already exists"));

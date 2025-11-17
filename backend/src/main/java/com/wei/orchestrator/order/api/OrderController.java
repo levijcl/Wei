@@ -11,6 +11,7 @@ import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.query.OrderQueryService;
 import com.wei.orchestrator.order.query.dto.OrderDetailDto;
 import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import jakarta.validation.Valid;
 import java.util.Arrays;
 import java.util.List;
@@ -76,7 +77,7 @@ public class OrderController {
                                                         item.getPrice()))
                                 .collect(Collectors.toList()));
 
-        Order order = orderApplicationService.createOrder(command);
+        Order order = orderApplicationService.createOrder(command, TriggerContext.manual());
 
         OrderResponse response = toOrderResponse(order);
 

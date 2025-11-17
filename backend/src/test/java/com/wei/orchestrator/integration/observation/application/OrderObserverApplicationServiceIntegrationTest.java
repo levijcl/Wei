@@ -12,6 +12,7 @@ import com.wei.orchestrator.observation.domain.model.valueobject.ObservationResu
 import com.wei.orchestrator.observation.domain.model.valueobject.ObservedOrderItem;
 import com.wei.orchestrator.observation.domain.port.OrderSourcePort;
 import com.wei.orchestrator.observation.domain.repository.OrderObserverRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -155,7 +156,7 @@ class OrderObserverApplicationServiceIntegrationTest {
             when(orderSourcePort.fetchNewOrders(any(), any())).thenReturn(mockResults);
 
             PollOrderSourceCommand pollCommand = new PollOrderSourceCommand("observer-poll-1");
-            orderObserverApplicationService.pollOrderSource(pollCommand);
+            orderObserverApplicationService.pollOrderSource(pollCommand, TriggerContext.manual());
 
             Optional<OrderObserver> updatedObserver =
                     orderObserverRepository.findById("observer-poll-1");
@@ -178,7 +179,7 @@ class OrderObserverApplicationServiceIntegrationTest {
             when(orderSourcePort.fetchNewOrders(any(), any())).thenReturn(mockResults1);
 
             PollOrderSourceCommand pollCommand = new PollOrderSourceCommand("observer-poll-2");
-            orderObserverApplicationService.pollOrderSource(pollCommand);
+            orderObserverApplicationService.pollOrderSource(pollCommand, TriggerContext.manual());
 
             Optional<OrderObserver> afterFirstPoll =
                     orderObserverRepository.findById("observer-poll-2");
@@ -195,7 +196,7 @@ class OrderObserverApplicationServiceIntegrationTest {
             List<ObservationResult> mockResults2 = createMockObservationResults(2);
             when(orderSourcePort.fetchNewOrders(any(), any())).thenReturn(mockResults2);
 
-            orderObserverApplicationService.pollOrderSource(pollCommand);
+            orderObserverApplicationService.pollOrderSource(pollCommand, TriggerContext.manual());
 
             Optional<OrderObserver> afterSecondPoll =
                     orderObserverRepository.findById("observer-poll-2");

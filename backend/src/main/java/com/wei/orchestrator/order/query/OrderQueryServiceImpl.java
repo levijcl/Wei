@@ -7,9 +7,14 @@ import com.wei.orchestrator.order.query.dto.OrderDetailDto;
 import com.wei.orchestrator.order.query.dto.OrderLineItemDto;
 import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
 import com.wei.orchestrator.order.query.infrastructure.OrderQueryRepository;
+import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
+import com.wei.orchestrator.wes.query.PickingTaskQueryService;
+import com.wei.orchestrator.wes.query.dto.PickingTaskSummaryDto;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -22,9 +27,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderQueryServiceImpl implements OrderQueryService {
 
     private final OrderQueryRepository orderQueryRepository;
+    private final PickingTaskQueryService pickingTaskQueryService;
 
-    public OrderQueryServiceImpl(OrderQueryRepository orderQueryRepository) {
+    public OrderQueryServiceImpl(
+            PickingTaskQueryService pickingTaskQueryService,
+            OrderQueryRepository orderQueryRepository) {
         this.orderQueryRepository = orderQueryRepository;
+        this.pickingTaskQueryService = pickingTaskQueryService;
     }
 
     @Override
@@ -39,9 +48,28 @@ public class OrderQueryServiceImpl implements OrderQueryService {
             resultPage = orderQueryRepository.findOrderSummariesNative(statusStrings, pageable);
         }
 
+        List<String> orderIds =
+                resultPage.getContent().stream()
+                        .map(
+                                o -> {
+                                    return (String) o[0];
+                                })
+                        .toList();
+        Map<String, List<PickingTaskSummaryDto>> pickingTaskByOrderId =
+                getPickingTaskByOrderIds(orderIds);
         List<OrderSummaryDto> dtos =
                 resultPage.getContent().stream()
-                        .map(this::mapToSummaryDto)
+                        .map(
+                                (content) -> {
+                                    OrderSummaryDto summary = mapToSummaryDto(content);
+                                    if (summary.getStatus().equals(OrderStatus.RESERVED.toString())
+                                            && isAnyTaskInProgress(
+                                                    pickingTaskByOrderId.get(
+                                                            summary.getOrderId()))) {
+                                        summary.setStatus("IN PROGRESS");
+                                    }
+                                    return summary;
+                                })
                         .collect(Collectors.toList());
 
         return new PageImpl<>(dtos, pageable, resultPage.getTotalElements());
@@ -56,6 +84,30 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                                 () -> new IllegalArgumentException("Order not found: " + orderId));
 
         return mapToDetailDto(entity);
+    }
+
+    Map<String, List<PickingTaskSummaryDto>> getPickingTaskByOrderIds(List<String> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<PickingTaskSummaryDto>> tasksByOrderId = new HashMap<>();
+        List<String> filteredOrderIds = orderIds.stream().distinct().toList();
+        for (String orderId : filteredOrderIds) {
+            List<PickingTaskSummaryDto> tasks =
+                    pickingTaskQueryService.getPickingTasksByOrderId(orderId);
+            tasksByOrderId.put(orderId, tasks);
+        }
+
+        return tasksByOrderId;
+    }
+
+    private boolean isAnyTaskInProgress(List<PickingTaskSummaryDto> pickingTasks) {
+        if (pickingTasks == null || pickingTasks.isEmpty()) {
+            return false;
+        }
+        return pickingTasks.stream()
+                .map(PickingTaskSummaryDto::getStatus)
+                .anyMatch(status -> status.equals(TaskStatus.IN_PROGRESS));
     }
 
     private OrderSummaryDto mapToSummaryDto(Object[] row) {

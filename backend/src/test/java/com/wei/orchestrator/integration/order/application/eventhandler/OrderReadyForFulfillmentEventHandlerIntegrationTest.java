@@ -16,6 +16,7 @@ import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -154,7 +155,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                                     "SKU-300", 2, new BigDecimal("20.00")));
 
             CreateOrderCommand createCommand = new CreateOrderCommand(orderId, items);
-            orderApplicationService.createOrder(createCommand);
+            orderApplicationService.createOrder(createCommand, TriggerContext.manual());
 
             InitiateFulfillmentCommand fulfillmentCommand = new InitiateFulfillmentCommand(orderId);
             orderApplicationService.initiateFulfillment(fulfillmentCommand);
@@ -179,7 +180,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                                         new CreateOrderCommand.OrderLineItemDto(
                                                 "SKU-400", 1, new BigDecimal("10.00")));
                         CreateOrderCommand createCommand = new CreateOrderCommand(orderId, items);
-                        orderApplicationService.createOrder(createCommand);
+                        orderApplicationService.createOrder(createCommand, TriggerContext.manual());
                         return null;
                     });
 
@@ -216,7 +217,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                                         new CreateOrderCommand.OrderLineItemDto(
                                                 "SKU-500", 2, new BigDecimal("20.00")));
                         CreateOrderCommand createCommand = new CreateOrderCommand(orderId, items);
-                        orderApplicationService.createOrder(createCommand);
+                        orderApplicationService.createOrder(createCommand, TriggerContext.manual());
                         return null;
                     });
 

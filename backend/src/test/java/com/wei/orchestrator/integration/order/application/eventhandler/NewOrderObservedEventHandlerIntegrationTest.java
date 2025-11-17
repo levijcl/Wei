@@ -13,6 +13,9 @@ import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.AuditRecord;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
+import com.wei.orchestrator.shared.domain.repository.AuditRecordRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -41,6 +44,8 @@ class NewOrderObservedEventHandlerIntegrationTest {
     @Autowired private TransactionTemplate transactionTemplate;
 
     @MockitoSpyBean private OrderApplicationService orderApplicationService;
+
+    @Autowired private AuditRecordRepository auditRecordRepository;
 
     @Nested
     class EventPublicationAndHandling {
@@ -255,7 +260,7 @@ class NewOrderObservedEventHandlerIntegrationTest {
 
             doThrow(new RuntimeException("Handler failed - simulating database error"))
                     .when(orderApplicationService)
-                    .createOrder(any());
+                    .createOrder(any(), any());
 
             NewOrderObservedEvent event = createTestEvent(handlerOrderId);
 
@@ -306,6 +311,162 @@ class NewOrderObservedEventHandlerIntegrationTest {
             Optional<Order> handlerOrder = orderRepository.findById(handlerOrderId);
             assertTrue(handlerOrder.isPresent(), "Handler's order should be committed");
             assertEquals(OrderStatus.CREATED, handlerOrder.get().getStatus());
+        }
+    }
+
+    @Nested
+    class EventCorrelation {
+
+        @Test
+        void shouldRecordBothEventsWithSameCorrelationIdWhenOrderScheduled() {
+            String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            TriggerContext triggerContext =
+                    TriggerContext.of("Scheduled:OrderObserver", correlationId, null);
+
+            LocalDateTime scheduledPickupTime = LocalDateTime.now().plusHours(3);
+
+            NewOrderObservedEvent event =
+                    createTestEventWithScheduling(orderId, scheduledPickupTime, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            Optional<Order> createdOrder = orderRepository.findById(orderId);
+            assertTrue(createdOrder.isPresent(), "Order should be created");
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(auditRecords.isEmpty(), "Should have audit records");
+
+            boolean allHaveSameCorrelationId =
+                    auditRecords.stream()
+                            .allMatch(
+                                    record ->
+                                            correlationId.equals(
+                                                    record.getEventMetadata().getCorrelationId()));
+            assertTrue(
+                    allHaveSameCorrelationId,
+                    "All audit records should share the same correlationId");
+
+            List<String> eventNames = auditRecords.stream().map(AuditRecord::getEventName).toList();
+
+            assertTrue(
+                    eventNames.contains("NewOrderObservedEvent"),
+                    "Should audit NewOrderObservedEvent");
+            assertTrue(
+                    eventNames.contains("OrderScheduledEvent"), "Should audit OrderScheduledEvent");
+
+            AuditRecord newOrderRecord =
+                    auditRecords.stream()
+                            .filter(r -> "NewOrderObservedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Scheduled:OrderObserver",
+                    newOrderRecord.getEventMetadata().getTriggerSource(),
+                    "NewOrderObservedEvent should have trigger source from scheduler");
+
+            AuditRecord scheduledRecord =
+                    auditRecords.stream()
+                            .filter(r -> "OrderScheduledEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "NewOrderObservedEvent",
+                    scheduledRecord.getEventMetadata().getTriggerSource(),
+                    "OrderScheduledEvent should have trigger source from NewOrderObservedEvent");
+        }
+
+        @Test
+        void shouldCaptureCorrectContextInAuditRecords() {
+            String orderId = "CONTEXT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            TriggerContext triggerContext = TriggerContext.of("TestTrigger", correlationId, null);
+            LocalDateTime scheduledPickupTime = LocalDateTime.now().plusHours(2);
+
+            NewOrderObservedEvent event =
+                    createTestEventWithScheduling(orderId, scheduledPickupTime, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(
+                    auditRecords.isEmpty(),
+                    "Should have audit records for correlationId: " + correlationId);
+
+            assertTrue(
+                    auditRecords.size() >= 1,
+                    "Should have at least one audit record, found: " + auditRecords.size());
+
+            AuditRecord newOrderRecord =
+                    auditRecords.stream()
+                            .filter(r -> "NewOrderObservedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow(
+                                    () ->
+                                            new AssertionError(
+                                                    "NewOrderObservedEvent not found. Available"
+                                                            + " events: "
+                                                            + auditRecords.stream()
+                                                                    .map(AuditRecord::getEventName)
+                                                                    .collect(
+                                                                            java.util.stream
+                                                                                    .Collectors
+                                                                                    .joining(
+                                                                                            ", "))));
+
+            assertEquals(
+                    "Observation Context",
+                    newOrderRecord.getEventMetadata().getContext(),
+                    "NewOrderObservedEvent should be in Observation Context");
+
+            auditRecords.stream()
+                    .filter(r -> "OrderScheduledEvent".equals(r.getEventName()))
+                    .findFirst()
+                    .ifPresent(
+                            scheduledRecord ->
+                                    assertEquals(
+                                            "Order Context",
+                                            scheduledRecord.getEventMetadata().getContext(),
+                                            "OrderScheduledEvent should be in Order Context"));
+        }
+
+        private NewOrderObservedEvent createTestEventWithScheduling(
+                String orderId, LocalDateTime scheduledPickupTime, TriggerContext triggerContext) {
+            List<ObservedOrderItem> items =
+                    Arrays.asList(
+                            new ObservedOrderItem(
+                                    "SKU-001", "Product 1", 10, new BigDecimal("100.00")),
+                            new ObservedOrderItem(
+                                    "SKU-002", "Product 2", 5, new BigDecimal("50.00")));
+
+            ObservationResult observationResult =
+                    new ObservationResult(
+                            orderId,
+                            "John Doe",
+                            "john@example.com",
+                            "123 Main St",
+                            "STANDARD",
+                            "WH-001",
+                            "NEW",
+                            scheduledPickupTime,
+                            items,
+                            LocalDateTime.now());
+
+            return new NewOrderObservedEvent("observer-1", observationResult, triggerContext);
         }
     }
 

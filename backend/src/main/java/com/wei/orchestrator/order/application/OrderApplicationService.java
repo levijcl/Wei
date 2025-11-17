@@ -2,12 +2,14 @@ package com.wei.orchestrator.order.application;
 
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
+import com.wei.orchestrator.order.domain.event.OrderScheduledEvent;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.FulfillmentLeadTime;
 import com.wei.orchestrator.order.domain.model.valueobject.ScheduledPickupTime;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.order.domain.service.OrderDomainService;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -32,7 +34,7 @@ public class OrderApplicationService {
         this.eventPublisher = eventPublisher;
     }
 
-    public Order createOrder(CreateOrderCommand command) {
+    public Order createOrder(CreateOrderCommand command, TriggerContext triggerContext) {
         orderDomainService.validateOrderCreation(command.getOrderId());
 
         List<OrderLineItem> lineItems =
@@ -60,10 +62,27 @@ public class OrderApplicationService {
 
         orderRepository.save(order);
 
-        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
+        order.getDomainEvents().stream()
+                .map(event -> enrichWithTriggerContext(event, context))
+                .forEach(eventPublisher::publishEvent);
         order.clearDomainEvents();
 
         return order;
+    }
+
+    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+        if (event instanceof OrderScheduledEvent original) {
+            TriggerContext newContext =
+                    TriggerContext.of(
+                            "NewOrderObservedEvent",
+                            triggerContext.getCorrelationId(),
+                            triggerContext.getTriggerBy());
+            return new OrderScheduledEvent(
+                    original.getOrderId(), original.getScheduledPickupTime(), newContext);
+        }
+        return event;
     }
 
     public void initiateFulfillment(InitiateFulfillmentCommand command) {

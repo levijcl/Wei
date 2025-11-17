@@ -1,5 +1,7 @@
 package com.wei.orchestrator.shared.domain.model.valueobject;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -10,8 +12,12 @@ public final class EventMetadata {
     private final String triggerSource;
     private final String triggerBy;
 
+    @JsonCreator
     private EventMetadata(
-            String context, UUID correlationId, String triggerSource, String triggerBy) {
+            @JsonProperty("context") String context,
+            @JsonProperty("correlationId") UUID correlationId,
+            @JsonProperty("triggerSource") String triggerSource,
+            @JsonProperty("triggerBy") String triggerBy) {
         if (context == null || context.isBlank()) {
             throw new IllegalArgumentException("Context cannot be null or blank");
         }
