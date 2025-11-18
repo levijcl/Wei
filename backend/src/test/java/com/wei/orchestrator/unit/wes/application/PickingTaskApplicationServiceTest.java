@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.application.PickingTaskApplicationService;
 import com.wei.orchestrator.wes.application.command.*;
 import com.wei.orchestrator.wes.application.command.dto.TaskItemDto;
@@ -47,7 +48,8 @@ class PickingTaskApplicationServiceTest {
                     new CreatePickingTaskForOrderCommand("ORDER_001", items, 1);
 
             WesOperationResultDto result =
-                    pickingTaskApplicationService.createPickingTaskForOrder(command);
+                    pickingTaskApplicationService.createPickingTaskForOrder(
+                            command, TriggerContext.manual());
 
             assertNotNull(result.getTaskId());
 
@@ -68,7 +70,8 @@ class PickingTaskApplicationServiceTest {
                     new CreatePickingTaskForOrderCommand("ORDER_001", items, 1);
 
             WesOperationResultDto result =
-                    pickingTaskApplicationService.createPickingTaskForOrder(command);
+                    pickingTaskApplicationService.createPickingTaskForOrder(
+                            command, TriggerContext.manual());
 
             assertFalse(result.isSuccess());
             assertEquals("Connection fail", result.getErrorMessage());

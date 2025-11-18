@@ -1,7 +1,11 @@
 package com.wei.orchestrator.wes.application;
 
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.application.command.*;
 import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCreatedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskFailedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskSubmittedEvent;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
@@ -31,11 +35,13 @@ public class PickingTaskApplicationService {
 
     @Transactional
     public WesOperationResultDto createPickingTaskForOrder(
-            CreatePickingTaskForOrderCommand command) {
+            CreatePickingTaskForOrderCommand command, TriggerContext triggerContext) {
         List<TaskItem> items =
                 command.getItems().stream()
                         .map(dto -> TaskItem.of(dto.getSku(), dto.getQuantity(), dto.getLocation()))
                         .collect(Collectors.toList());
+
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
 
         PickingTask pickingTask =
                 PickingTask.createForOrder(command.getOrderId(), items, command.getPriority());
@@ -47,13 +53,13 @@ public class PickingTaskApplicationService {
             savedTask.submitToWes(wesTaskId);
 
             pickingTaskRepository.save(savedTask);
-            publishEvents(savedTask);
+            publishEventsWithContext(savedTask, context);
 
             return WesOperationResultDto.success(savedTask.getTaskId());
         } catch (Exception e) {
             savedTask.markFailed(e.getMessage());
             pickingTaskRepository.save(savedTask);
-            publishEvents(savedTask);
+            publishEventsWithContext(savedTask, context);
 
             return WesOperationResultDto.failure(e.getMessage());
         }
@@ -172,5 +178,50 @@ public class PickingTaskApplicationService {
     private void publishEvents(PickingTask pickingTask) {
         pickingTask.getDomainEvents().forEach(eventPublisher::publishEvent);
         pickingTask.clearDomainEvents();
+    }
+
+    private void publishEventsWithContext(PickingTask pickingTask, TriggerContext triggerContext) {
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
+        pickingTask.getDomainEvents().stream()
+                .map(event -> enrichWithTriggerContext(event, context))
+                .forEach(eventPublisher::publishEvent);
+        pickingTask.clearDomainEvents();
+    }
+
+    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+        TriggerContext newContext =
+                TriggerContext.of(
+                        "OrderReservedEvent",
+                        triggerContext.getCorrelationId(),
+                        triggerContext.getTriggerBy());
+
+        if (event instanceof PickingTaskCreatedEvent original) {
+            return new PickingTaskCreatedEvent(
+                    original.getTaskId(),
+                    original.getOrderId(),
+                    original.getOrigin(),
+                    original.getPriority(),
+                    original.getItems(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskSubmittedEvent original) {
+            return new PickingTaskSubmittedEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrigin(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskFailedEvent original) {
+            return new PickingTaskFailedEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrderId(),
+                    original.getOrigin(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        }
+        return event;
     }
 }

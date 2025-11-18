@@ -20,6 +20,8 @@ import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.shared.domain.model.AuditRecord;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.shared.domain.repository.AuditRecordRepository;
+import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
+import com.wei.orchestrator.wes.domain.port.WesPort;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -52,6 +54,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
     @Autowired private InventoryApplicationService inventoryApplicationService;
 
     @MockitoBean private InventoryPort inventoryPort;
+    @MockitoBean private WesPort wesPort;
 
     @Nested
     class EventPublicationAndHandling {
@@ -60,6 +63,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
         void shouldHandleOrderReadyForFulfillmentEvent() {
             when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
                     .thenReturn(ExternalReservationId.of("ext-reservation-123"));
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
 
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -159,6 +164,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
         void shouldCommitBothTransactionsWhenHandlerSucceeds() {
             when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
                     .thenReturn(ExternalReservationId.of("ext-reservation-success"));
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
 
             String orderId = "SUCCESS-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -190,10 +197,11 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
     class EventCorrelation {
 
         @Test
-        void shouldRecordEventsWithSameCorrelationIdWhenInventoryReservedSuccessfully()
-                throws Exception {
+        void shouldRecordEventsWithSameCorrelationIdWhenInventoryReservedSuccessfully() {
             when(inventoryPort.createReservation(any(), any(), any(), anyInt()))
                     .thenReturn(ExternalReservationId.of("ext-reservation-123"));
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
 
             String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             UUID correlationId = UUID.randomUUID();
@@ -222,7 +230,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                     auditRecordRepository.findByCorrelationId(correlationId);
 
             assertFalse(auditRecords.isEmpty(), "Should have audit records");
-            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+            assertEquals(4, auditRecords.size(), "Should have exactly 2 audit records");
 
             boolean allHaveSameCorrelationId =
                     auditRecords.stream()
@@ -241,6 +249,8 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
             assertTrue(
                     eventNames.contains("InventoryReservedEvent"),
                     "Should audit InventoryReservedEvent");
+            assertTrue(eventNames.contains("OrderReservedEvent"));
+            assertTrue(eventNames.contains("PickingTaskSubmittedEvent"));
 
             AuditRecord orderReadyRecord =
                     auditRecords.stream()

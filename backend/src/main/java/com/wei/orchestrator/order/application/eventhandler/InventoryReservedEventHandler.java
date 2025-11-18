@@ -4,9 +4,11 @@ import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionLine;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import com.wei.orchestrator.order.domain.event.OrderReservedEvent;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -106,7 +108,14 @@ public class InventoryReservedEventHandler {
 
         orderRepository.save(order);
 
-        order.getDomainEvents().forEach(eventPublisher::publishEvent);
+        TriggerContext triggerContext =
+                reservedEvent.getTriggerContext() != null
+                        ? reservedEvent.getTriggerContext()
+                        : TriggerContext.manual();
+
+        order.getDomainEvents().stream()
+                .map(event -> enrichWithTriggerContext(event, triggerContext))
+                .forEach(eventPublisher::publishEvent);
         order.clearDomainEvents();
 
         logger.info(
@@ -115,5 +124,19 @@ public class InventoryReservedEventHandler {
                 orderId,
                 transactionLines.size(),
                 order.getStatus());
+    }
+
+    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+        TriggerContext newContext =
+                TriggerContext.of(
+                        "InventoryReservedEvent",
+                        triggerContext.getCorrelationId(),
+                        triggerContext.getTriggerBy());
+
+        if (event instanceof OrderReservedEvent original) {
+            return new OrderReservedEvent(
+                    original.getOrderId(), original.getReservedLineItemIds(), newContext);
+        }
+        return event;
     }
 }

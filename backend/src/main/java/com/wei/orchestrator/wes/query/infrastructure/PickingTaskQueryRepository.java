@@ -52,7 +52,7 @@ public interface PickingTaskQueryRepository extends JpaRepository<PickingTaskEnt
                     FROM picking_tasks pt
                     LEFT JOIN task_items ti ON pt.task_id = ti.task_id
                     WHERE pt.order_id = :orderId
-                    GROUP BY pt.task_id, pt.wes_task_id, pt.order_id, pt.origin, pt.priority, pt.status, pt.created_at, pt.completed_at
+                    GROUP BY pt.task_id, pt.wes_task_id, pt.order_id, pt.origin, pt.priority, pt.status, pt.created_at, pt.completed_at, pt.canceled_at
                     ORDER BY pt.created_at DESC
                     """,
             nativeQuery = true)
