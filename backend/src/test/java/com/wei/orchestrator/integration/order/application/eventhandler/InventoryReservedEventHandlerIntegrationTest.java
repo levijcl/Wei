@@ -1,6 +1,8 @@
 package com.wei.orchestrator.integration.order.application.eventhandler;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
@@ -11,6 +13,8 @@ import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
+import com.wei.orchestrator.wes.domain.port.WesPort;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
@@ -38,11 +43,15 @@ class InventoryReservedEventHandlerIntegrationTest {
 
     @Autowired private TransactionTemplate transactionTemplate;
 
+    @MockitoBean private WesPort wesPort;
+
     @Nested
     class EventPublicationAndHandling {
 
         @Test
         void shouldHandleInventoryReservedEvent() {
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             String externalReservationId =
                     "EXT-RES-" + UUID.randomUUID().toString().substring(0, 8);
@@ -120,6 +129,8 @@ class InventoryReservedEventHandlerIntegrationTest {
 
         @Test
         void shouldDirectlyInvokeHandlerMethod() {
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
             String orderId = "INT-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             String externalReservationId =
                     "EXT-RES-" + UUID.randomUUID().toString().substring(0, 8);
@@ -240,6 +251,8 @@ class InventoryReservedEventHandlerIntegrationTest {
 
         @Test
         void shouldCommitOrderUpdateWhenHandlerSucceeds() {
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
             String orderId = "SUCCESS-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             String externalReservationId =
                     "EXT-RES-" + UUID.randomUUID().toString().substring(0, 8);
@@ -327,6 +340,8 @@ class InventoryReservedEventHandlerIntegrationTest {
 
         @Test
         void shouldHandleReservationForAllLineItemsSequentially() {
+            when(wesPort.submitPickingTask(any()))
+                    .thenReturn(WesTaskId.of(UUID.randomUUID().toString()));
             String orderId = "MULTI-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
 
             Order order =
