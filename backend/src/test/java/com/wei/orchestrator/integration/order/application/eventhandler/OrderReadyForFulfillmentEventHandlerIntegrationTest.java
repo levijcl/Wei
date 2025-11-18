@@ -230,7 +230,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                     auditRecordRepository.findByCorrelationId(correlationId);
 
             assertFalse(auditRecords.isEmpty(), "Should have audit records");
-            assertEquals(4, auditRecords.size(), "Should have exactly 2 audit records");
+            assertEquals(5, auditRecords.size(), "Should have exactly 2 audit records");
 
             boolean allHaveSameCorrelationId =
                     auditRecords.stream()
@@ -250,6 +250,7 @@ class OrderReadyForFulfillmentEventHandlerIntegrationTest {
                     eventNames.contains("InventoryReservedEvent"),
                     "Should audit InventoryReservedEvent");
             assertTrue(eventNames.contains("OrderReservedEvent"));
+            assertTrue(eventNames.contains("PickingTaskCreatedEvent"));
             assertTrue(eventNames.contains("PickingTaskSubmittedEvent"));
 
             AuditRecord orderReadyRecord =

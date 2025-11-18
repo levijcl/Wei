@@ -46,20 +46,20 @@ public class PickingTaskApplicationService {
         PickingTask pickingTask =
                 PickingTask.createForOrder(command.getOrderId(), items, command.getPriority());
 
-        PickingTask savedTask = pickingTaskRepository.save(pickingTask);
+        pickingTaskRepository.save(pickingTask);
 
         try {
-            WesTaskId wesTaskId = wesPort.submitPickingTask(savedTask);
-            savedTask.submitToWes(wesTaskId);
+            WesTaskId wesTaskId = wesPort.submitPickingTask(pickingTask);
+            pickingTask.submitToWes(wesTaskId);
 
-            pickingTaskRepository.save(savedTask);
-            publishEventsWithContext(savedTask, context);
+            pickingTaskRepository.save(pickingTask);
+            publishEventsWithContext(pickingTask, context);
 
-            return WesOperationResultDto.success(savedTask.getTaskId());
+            return WesOperationResultDto.success(pickingTask.getTaskId());
         } catch (Exception e) {
-            savedTask.markFailed(e.getMessage());
-            pickingTaskRepository.save(savedTask);
-            publishEventsWithContext(savedTask, context);
+            pickingTask.markFailed(e.getMessage());
+            pickingTaskRepository.save(pickingTask);
+            publishEventsWithContext(pickingTask, context);
 
             return WesOperationResultDto.failure(e.getMessage());
         }
