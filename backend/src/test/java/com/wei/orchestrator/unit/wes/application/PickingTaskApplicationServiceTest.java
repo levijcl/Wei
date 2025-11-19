@@ -214,7 +214,7 @@ class PickingTaskApplicationServiceTest {
 
             MarkTaskCompletedCommand command = new MarkTaskCompletedCommand("TASK_001");
 
-            pickingTaskApplicationService.markTaskCompleted(command);
+            pickingTaskApplicationService.markTaskCompleted(command, TriggerContext.manual());
 
             verify(task).markCompleted();
             verify(pickingTaskRepository).save(task);
@@ -229,7 +229,9 @@ class PickingTaskApplicationServiceTest {
             IllegalArgumentException exception =
                     assertThrows(
                             IllegalArgumentException.class,
-                            () -> pickingTaskApplicationService.markTaskCompleted(command));
+                            () ->
+                                    pickingTaskApplicationService.markTaskCompleted(
+                                            command, TriggerContext.manual()));
 
             assertTrue(exception.getMessage().contains("Picking task not found"));
         }
@@ -244,7 +246,7 @@ class PickingTaskApplicationServiceTest {
 
             MarkTaskCompletedCommand command = new MarkTaskCompletedCommand("TASK_001");
 
-            pickingTaskApplicationService.markTaskCompleted(command);
+            pickingTaskApplicationService.markTaskCompleted(command, TriggerContext.manual());
 
             verify(eventPublisher).publishEvent(any(Object.class));
             verify(task).clearDomainEvents();
@@ -263,7 +265,7 @@ class PickingTaskApplicationServiceTest {
             MarkTaskFailedCommand command =
                     new MarkTaskFailedCommand("TASK_001", "Item out of stock");
 
-            pickingTaskApplicationService.markTaskFailed(command);
+            pickingTaskApplicationService.markTaskFailed(command, TriggerContext.manual());
 
             verify(task).markFailed("Item out of stock");
             verify(pickingTaskRepository).save(task);
@@ -279,7 +281,9 @@ class PickingTaskApplicationServiceTest {
             IllegalArgumentException exception =
                     assertThrows(
                             IllegalArgumentException.class,
-                            () -> pickingTaskApplicationService.markTaskFailed(command));
+                            () ->
+                                    pickingTaskApplicationService.markTaskFailed(
+                                            command, TriggerContext.manual()));
 
             assertTrue(exception.getMessage().contains("Picking task not found"));
         }
@@ -295,7 +299,7 @@ class PickingTaskApplicationServiceTest {
             MarkTaskFailedCommand command =
                     new MarkTaskFailedCommand("TASK_001", "Hardware failure");
 
-            pickingTaskApplicationService.markTaskFailed(command);
+            pickingTaskApplicationService.markTaskFailed(command, TriggerContext.manual());
 
             verify(eventPublisher).publishEvent(any(Object.class));
             verify(task).clearDomainEvents();

@@ -3,6 +3,8 @@ package com.wei.orchestrator.wes.application;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.application.command.*;
 import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCanceledEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
 import com.wei.orchestrator.wes.domain.event.PickingTaskCreatedEvent;
 import com.wei.orchestrator.wes.domain.event.PickingTaskFailedEvent;
 import com.wei.orchestrator.wes.domain.event.PickingTaskSubmittedEvent;
@@ -53,13 +55,13 @@ public class PickingTaskApplicationService {
             pickingTask.submitToWes(wesTaskId);
 
             pickingTaskRepository.save(pickingTask);
-            publishEventsWithContext(pickingTask, context);
+            publishEventsWithContext(pickingTask, context, "OrderReservedEvent");
 
             return WesOperationResultDto.success(pickingTask.getTaskId());
         } catch (Exception e) {
             pickingTask.markFailed(e.getMessage());
             pickingTaskRepository.save(pickingTask);
-            publishEventsWithContext(pickingTask, context);
+            publishEventsWithContext(pickingTask, context, "OrderReservedEvent");
 
             return WesOperationResultDto.failure(e.getMessage());
         }
@@ -104,7 +106,7 @@ public class PickingTaskApplicationService {
     }
 
     @Transactional
-    public void markTaskCompleted(MarkTaskCompletedCommand command) {
+    public void markTaskCompleted(MarkTaskCompletedCommand command, TriggerContext triggerContext) {
         PickingTask pickingTask =
                 pickingTaskRepository
                         .findById(command.getTaskId())
@@ -117,11 +119,12 @@ public class PickingTaskApplicationService {
 
         pickingTaskRepository.save(pickingTask);
 
-        publishEvents(pickingTask);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+        publishEventsWithContext(pickingTask, context, "WesTaskStatusUpdatedEvent");
     }
 
     @Transactional
-    public void markTaskFailed(MarkTaskFailedCommand command) {
+    public void markTaskFailed(MarkTaskFailedCommand command, TriggerContext triggerContext) {
         PickingTask pickingTask =
                 pickingTaskRepository
                         .findById(command.getTaskId())
@@ -134,11 +137,12 @@ public class PickingTaskApplicationService {
 
         pickingTaskRepository.save(pickingTask);
 
-        publishEvents(pickingTask);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+        publishEventsWithContext(pickingTask, context, "WesTaskStatusUpdatedEvent");
     }
 
     @Transactional
-    public void markTaskCanceled(MarkTaskCanceledCommand command) {
+    public void markTaskCanceled(MarkTaskCanceledCommand command, TriggerContext triggerContext) {
         PickingTask pickingTask =
                 pickingTaskRepository
                         .findById(command.getTaskId())
@@ -151,7 +155,8 @@ public class PickingTaskApplicationService {
 
         pickingTaskRepository.save(pickingTask);
 
-        publishEvents(pickingTask);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+        publishEventsWithContext(pickingTask, context, "WesTaskStatusUpdatedEvent");
     }
 
     @Transactional
@@ -180,19 +185,21 @@ public class PickingTaskApplicationService {
         pickingTask.clearDomainEvents();
     }
 
-    private void publishEventsWithContext(PickingTask pickingTask, TriggerContext triggerContext) {
+    private void publishEventsWithContext(
+            PickingTask pickingTask, TriggerContext triggerContext, String triggerSource) {
         TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
 
         pickingTask.getDomainEvents().stream()
-                .map(event -> enrichWithTriggerContext(event, context))
+                .map(event -> enrichWithTriggerContext(event, context, triggerSource))
                 .forEach(eventPublisher::publishEvent);
         pickingTask.clearDomainEvents();
     }
 
-    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+    private Object enrichWithTriggerContext(
+            Object event, TriggerContext triggerContext, String triggerSource) {
         TriggerContext newContext =
                 TriggerContext.of(
-                        "OrderReservedEvent",
+                        triggerSource,
                         triggerContext.getCorrelationId(),
                         triggerContext.getTriggerBy());
 
@@ -218,6 +225,21 @@ public class PickingTaskApplicationService {
                     original.getWesTaskId(),
                     original.getOrderId(),
                     original.getOrigin(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskCompletedEvent original) {
+            return new PickingTaskCompletedEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrderId(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskCanceledEvent original) {
+            return new PickingTaskCanceledEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrderId(),
                     original.getReason(),
                     original.getOccurredAt(),
                     newContext);

@@ -54,10 +54,10 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             ArgumentCaptor<MarkTaskCompletedCommand> captor =
                     ArgumentCaptor.forClass(MarkTaskCompletedCommand.class);
-            verify(pickingTaskApplicationService).markTaskCompleted(captor.capture());
+            verify(pickingTaskApplicationService).markTaskCompleted(captor.capture(), any());
             assertEquals(taskId, captor.getValue().getTaskId());
 
-            verify(pickingTaskApplicationService, never()).markTaskFailed(any());
+            verify(pickingTaskApplicationService, never()).markTaskFailed(any(), any());
             verify(pickingTaskApplicationService, never()).cancelTask(any());
             verify(pickingTaskApplicationService, never()).updateTaskStatusFromWes(any());
         }
@@ -79,11 +79,11 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             ArgumentCaptor<MarkTaskFailedCommand> captor =
                     ArgumentCaptor.forClass(MarkTaskFailedCommand.class);
-            verify(pickingTaskApplicationService).markTaskFailed(captor.capture());
+            verify(pickingTaskApplicationService).markTaskFailed(captor.capture(), any());
             assertEquals(taskId, captor.getValue().getTaskId());
             assertEquals("Failed in WES", captor.getValue().getReason());
 
-            verify(pickingTaskApplicationService, never()).markTaskCompleted(any());
+            verify(pickingTaskApplicationService, never()).markTaskCompleted(any(), any());
             verify(pickingTaskApplicationService, never()).cancelTask(any());
             verify(pickingTaskApplicationService, never()).updateTaskStatusFromWes(any());
         }
@@ -105,12 +105,12 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             ArgumentCaptor<MarkTaskCanceledCommand> captor =
                     ArgumentCaptor.forClass(MarkTaskCanceledCommand.class);
-            verify(pickingTaskApplicationService).markTaskCanceled(captor.capture());
+            verify(pickingTaskApplicationService).markTaskCanceled(captor.capture(), any());
             assertEquals(taskId, captor.getValue().getTaskId());
             assertEquals("Canceled in WES", captor.getValue().getReason());
 
-            verify(pickingTaskApplicationService, never()).markTaskCompleted(any());
-            verify(pickingTaskApplicationService, never()).markTaskFailed(any());
+            verify(pickingTaskApplicationService, never()).markTaskCompleted(any(), any());
+            verify(pickingTaskApplicationService, never()).markTaskFailed(any(), any());
             verify(pickingTaskApplicationService, never()).updateTaskStatusFromWes(any());
         }
 
@@ -135,8 +135,8 @@ class WesTaskStatusUpdatedEventHandlerTest {
             assertEquals(taskId, captor.getValue().getTaskId());
             assertEquals(TaskStatus.IN_PROGRESS, captor.getValue().getStatus());
 
-            verify(pickingTaskApplicationService, never()).markTaskCompleted(any());
-            verify(pickingTaskApplicationService, never()).markTaskFailed(any());
+            verify(pickingTaskApplicationService, never()).markTaskCompleted(any(), any());
+            verify(pickingTaskApplicationService, never()).markTaskFailed(any(), any());
             verify(pickingTaskApplicationService, never()).cancelTask(any());
         }
 
@@ -161,8 +161,8 @@ class WesTaskStatusUpdatedEventHandlerTest {
             assertEquals(taskId, captor.getValue().getTaskId());
             assertEquals(TaskStatus.SUBMITTED, captor.getValue().getStatus());
 
-            verify(pickingTaskApplicationService, never()).markTaskCompleted(any());
-            verify(pickingTaskApplicationService, never()).markTaskFailed(any());
+            verify(pickingTaskApplicationService, never()).markTaskCompleted(any(), any());
+            verify(pickingTaskApplicationService, never()).markTaskFailed(any(), any());
             verify(pickingTaskApplicationService, never()).cancelTask(any());
         }
 
@@ -187,8 +187,8 @@ class WesTaskStatusUpdatedEventHandlerTest {
             assertEquals(taskId, captor.getValue().getTaskId());
             assertEquals(TaskStatus.PENDING, captor.getValue().getStatus());
 
-            verify(pickingTaskApplicationService, never()).markTaskCompleted(any());
-            verify(pickingTaskApplicationService, never()).markTaskFailed(any());
+            verify(pickingTaskApplicationService, never()).markTaskCompleted(any(), any());
+            verify(pickingTaskApplicationService, never()).markTaskFailed(any(), any());
             verify(pickingTaskApplicationService, never()).cancelTask(any());
         }
 
@@ -211,9 +211,9 @@ class WesTaskStatusUpdatedEventHandlerTest {
             assertTrue(exception.getMessage().contains("PickingTask not found for wesTaskId"));
             assertTrue(exception.getMessage().contains(wesTaskId));
 
-            verify(pickingTaskApplicationService, never()).markTaskCompleted(any());
-            verify(pickingTaskApplicationService, never()).markTaskFailed(any());
-            verify(pickingTaskApplicationService, never()).markTaskCanceled(any());
+            verify(pickingTaskApplicationService, never()).markTaskCompleted(any(), any());
+            verify(pickingTaskApplicationService, never()).markTaskFailed(any(), any());
+            verify(pickingTaskApplicationService, never()).markTaskCanceled(any(), any());
             verify(pickingTaskApplicationService, never()).updateTaskStatusFromWes(any());
         }
 
@@ -239,7 +239,7 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             ArgumentCaptor<MarkTaskCompletedCommand> captor =
                     ArgumentCaptor.forClass(MarkTaskCompletedCommand.class);
-            verify(pickingTaskApplicationService).markTaskCompleted(captor.capture());
+            verify(pickingTaskApplicationService).markTaskCompleted(captor.capture(), any());
             assertEquals(taskId1, captor.getValue().getTaskId());
         }
 
@@ -260,7 +260,7 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             verify(pickingTaskRepository).findByWesTaskId(wesTaskId);
             verify(pickingTaskApplicationService)
-                    .markTaskCompleted(any(MarkTaskCompletedCommand.class));
+                    .markTaskCompleted(any(MarkTaskCompletedCommand.class), any());
         }
 
         @Test
@@ -280,7 +280,7 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             ArgumentCaptor<MarkTaskFailedCommand> captor =
                     ArgumentCaptor.forClass(MarkTaskFailedCommand.class);
-            verify(pickingTaskApplicationService).markTaskFailed(captor.capture());
+            verify(pickingTaskApplicationService).markTaskFailed(captor.capture(), any());
             assertEquals("Failed in WES", captor.getValue().getReason());
         }
 
@@ -301,7 +301,7 @@ class WesTaskStatusUpdatedEventHandlerTest {
 
             ArgumentCaptor<MarkTaskCanceledCommand> captor =
                     ArgumentCaptor.forClass(MarkTaskCanceledCommand.class);
-            verify(pickingTaskApplicationService).markTaskCanceled(captor.capture());
+            verify(pickingTaskApplicationService).markTaskCanceled(captor.capture(), any());
             assertEquals("Canceled in WES", captor.getValue().getReason());
         }
     }

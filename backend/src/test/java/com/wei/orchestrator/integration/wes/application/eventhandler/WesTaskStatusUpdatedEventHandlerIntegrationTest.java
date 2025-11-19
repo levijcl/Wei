@@ -3,6 +3,10 @@ package com.wei.orchestrator.integration.wes.application.eventhandler;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.wei.orchestrator.observation.domain.event.WesTaskStatusUpdatedEvent;
+import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.AuditRecord;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
+import com.wei.orchestrator.shared.domain.repository.AuditRecordRepository;
 import com.wei.orchestrator.wes.application.eventhandler.WesTaskStatusUpdatedEventHandler;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
@@ -16,6 +20,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -28,6 +33,12 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
     @Autowired private WesTaskStatusUpdatedEventHandler eventHandler;
 
     @Autowired private TransactionTemplate transactionTemplate;
+
+    @Autowired private ApplicationEventPublisher eventPublisher;
+
+    @Autowired private AuditRecordRepository auditRecordRepository;
+
+    @Autowired private OrderRepository orderRepository;
 
     @Nested
     class EventPublicationAndHandling {
@@ -384,6 +395,218 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             assertTrue(foundTask.isPresent());
             assertEquals(TaskStatus.FAILED, foundTask.get().getStatus());
             assertEquals("Failed in WES", foundTask.get().getFailureReason());
+        }
+    }
+
+    @Nested
+    class EventCorrelation {
+
+        @Test
+        void shouldRecordEventsWithSameCorrelationIdWhenTaskCompleted() {
+            String wesTaskId = "WES-CORR-" + UUID.randomUUID().toString().substring(0, 8);
+            String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+            String sku = "SKU-CORR-001";
+
+            List<TaskItem> items = List.of(TaskItem.of(sku, 10, "WH-001"));
+            PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
+            pickingTask.submitToWes(WesTaskId.of(wesTaskId));
+            pickingTaskRepository.save(pickingTask);
+
+            TriggerContext triggerContext =
+                    TriggerContext.of("Scheduled:WesObserver", correlationId, null);
+
+            WesTaskStatusUpdatedEvent event =
+                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(auditRecords.isEmpty(), "Should have audit records");
+            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+
+            boolean allHaveSameCorrelationId =
+                    auditRecords.stream()
+                            .allMatch(
+                                    record ->
+                                            correlationId.equals(
+                                                    record.getEventMetadata().getCorrelationId()));
+            assertTrue(
+                    allHaveSameCorrelationId,
+                    "All audit records should share the same correlationId");
+
+            List<String> eventNames = auditRecords.stream().map(AuditRecord::getEventName).toList();
+            assertTrue(
+                    eventNames.contains("WesTaskStatusUpdatedEvent"),
+                    "Should audit WesTaskStatusUpdatedEvent");
+            assertTrue(
+                    eventNames.contains("PickingTaskCompletedEvent"),
+                    "Should audit PickingTaskCompletedEvent");
+
+            AuditRecord wesTaskStatusUpdatedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "WesTaskStatusUpdatedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Scheduled:WesObserver",
+                    wesTaskStatusUpdatedRecord.getEventMetadata().getTriggerSource(),
+                    "WesTaskStatusUpdatedEvent should have trigger source from scheduler");
+
+            AuditRecord pickingTaskCompletedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "PickingTaskCompletedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "WesTaskStatusUpdatedEvent",
+                    pickingTaskCompletedRecord.getEventMetadata().getTriggerSource(),
+                    "PickingTaskCompletedEvent should have trigger source from"
+                            + " WesTaskStatusUpdatedEvent");
+        }
+
+        @Test
+        void shouldRecordEventsWithSameCorrelationIdWhenTaskFailed() {
+            String wesTaskId = "WES-CORR-" + UUID.randomUUID().toString().substring(0, 8);
+            String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            List<TaskItem> items = List.of(TaskItem.of("SKU-CORR-002", 5, "WH-001"));
+            PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
+            pickingTask.submitToWes(WesTaskId.of(wesTaskId));
+            pickingTaskRepository.save(pickingTask);
+
+            TriggerContext triggerContext =
+                    TriggerContext.of("Scheduled:WesObserver", correlationId, null);
+
+            WesTaskStatusUpdatedEvent event =
+                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.FAILED, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(auditRecords.isEmpty(), "Should have audit records");
+            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+
+            boolean allHaveSameCorrelationId =
+                    auditRecords.stream()
+                            .allMatch(
+                                    record ->
+                                            correlationId.equals(
+                                                    record.getEventMetadata().getCorrelationId()));
+            assertTrue(
+                    allHaveSameCorrelationId,
+                    "All audit records should share the same correlationId");
+
+            List<String> eventNames = auditRecords.stream().map(AuditRecord::getEventName).toList();
+            assertTrue(
+                    eventNames.contains("WesTaskStatusUpdatedEvent"),
+                    "Should audit WesTaskStatusUpdatedEvent");
+            assertTrue(
+                    eventNames.contains("PickingTaskFailedEvent"),
+                    "Should audit PickingTaskFailedEvent");
+
+            AuditRecord wesTaskStatusUpdatedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "WesTaskStatusUpdatedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Scheduled:WesObserver",
+                    wesTaskStatusUpdatedRecord.getEventMetadata().getTriggerSource(),
+                    "WesTaskStatusUpdatedEvent should have trigger source from scheduler");
+
+            AuditRecord pickingTaskFailedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "PickingTaskFailedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "WesTaskStatusUpdatedEvent",
+                    pickingTaskFailedRecord.getEventMetadata().getTriggerSource(),
+                    "PickingTaskFailedEvent should have trigger source from"
+                            + " WesTaskStatusUpdatedEvent");
+        }
+
+        @Test
+        void shouldRecordEventsWithSameCorrelationIdWhenTaskCanceled() {
+            String wesTaskId = "WES-CORR-" + UUID.randomUUID().toString().substring(0, 8);
+            String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
+            UUID correlationId = UUID.randomUUID();
+
+            List<TaskItem> items = List.of(TaskItem.of("SKU-CORR-003", 3, "WH-001"));
+            PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
+            pickingTask.submitToWes(WesTaskId.of(wesTaskId));
+            pickingTaskRepository.save(pickingTask);
+
+            TriggerContext triggerContext =
+                    TriggerContext.of("Scheduled:WesObserver", correlationId, null);
+
+            WesTaskStatusUpdatedEvent event =
+                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.CANCELED, triggerContext);
+
+            transactionTemplate.execute(
+                    status -> {
+                        eventPublisher.publishEvent(event);
+                        return null;
+                    });
+
+            List<AuditRecord> auditRecords =
+                    auditRecordRepository.findByCorrelationId(correlationId);
+
+            assertFalse(auditRecords.isEmpty(), "Should have audit records");
+            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+
+            boolean allHaveSameCorrelationId =
+                    auditRecords.stream()
+                            .allMatch(
+                                    record ->
+                                            correlationId.equals(
+                                                    record.getEventMetadata().getCorrelationId()));
+            assertTrue(
+                    allHaveSameCorrelationId,
+                    "All audit records should share the same correlationId");
+
+            List<String> eventNames = auditRecords.stream().map(AuditRecord::getEventName).toList();
+            assertTrue(
+                    eventNames.contains("WesTaskStatusUpdatedEvent"),
+                    "Should audit WesTaskStatusUpdatedEvent");
+            assertTrue(
+                    eventNames.contains("PickingTaskCanceledEvent"),
+                    "Should audit PickingTaskCanceledEvent");
+
+            AuditRecord wesTaskStatusUpdatedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "WesTaskStatusUpdatedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "Scheduled:WesObserver",
+                    wesTaskStatusUpdatedRecord.getEventMetadata().getTriggerSource(),
+                    "WesTaskStatusUpdatedEvent should have trigger source from scheduler");
+
+            AuditRecord pickingTaskCanceledRecord =
+                    auditRecords.stream()
+                            .filter(r -> "PickingTaskCanceledEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "WesTaskStatusUpdatedEvent",
+                    pickingTaskCanceledRecord.getEventMetadata().getTriggerSource(),
+                    "PickingTaskCanceledEvent should have trigger source from"
+                            + " WesTaskStatusUpdatedEvent");
         }
     }
 }

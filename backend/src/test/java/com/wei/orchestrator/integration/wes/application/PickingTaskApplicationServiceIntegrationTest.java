@@ -163,7 +163,8 @@ class PickingTaskApplicationServiceIntegrationTest {
             assertEquals(TaskStatus.IN_PROGRESS, inProgressTask.get().getStatus());
 
             MarkTaskCompletedCommand completeCommand = new MarkTaskCompletedCommand(taskId);
-            pickingTaskApplicationService.markTaskCompleted(completeCommand);
+            pickingTaskApplicationService.markTaskCompleted(
+                    completeCommand, TriggerContext.manual());
 
             Optional<PickingTask> completedTask = pickingTaskRepository.findById(taskId);
             assertTrue(completedTask.isPresent());
@@ -212,7 +213,7 @@ class PickingTaskApplicationServiceIntegrationTest {
             String taskId = result.getTaskId();
 
             MarkTaskFailedCommand failCommand = new MarkTaskFailedCommand(taskId, "Item damaged");
-            pickingTaskApplicationService.markTaskFailed(failCommand);
+            pickingTaskApplicationService.markTaskFailed(failCommand, TriggerContext.manual());
 
             Optional<PickingTask> failedTask = pickingTaskRepository.findById(taskId);
             assertTrue(failedTask.isPresent());
