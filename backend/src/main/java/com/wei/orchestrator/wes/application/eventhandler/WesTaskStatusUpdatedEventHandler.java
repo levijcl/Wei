@@ -36,24 +36,21 @@ public class WesTaskStatusUpdatedEventHandler {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleWesTaskStatusUpdated(WesTaskStatusUpdatedEvent event) {
-        String wesTaskId = event.getTaskId();
+        String taskId = event.getTaskId();
         TriggerContext triggerContext = event.getTriggerContext();
 
         logger.info(
-                "Handling WesTaskStatusUpdatedEvent: wesTaskId={}, newStatus={}",
-                wesTaskId,
+                "Handling WesTaskStatusUpdatedEvent: taskId={}, newStatus={}",
+                taskId,
                 event.getNewStatus());
 
         PickingTask pickingTask =
-                pickingTaskRepository.findByWesTaskId(wesTaskId).stream()
-                        .findFirst()
+                pickingTaskRepository
+                        .findById(taskId)
                         .orElseThrow(
                                 () ->
                                         new IllegalStateException(
-                                                "PickingTask not found for wesTaskId: "
-                                                        + wesTaskId));
-
-        String taskId = pickingTask.getTaskId();
+                                                "PickingTask not found for taskId: " + taskId));
 
         switch (event.getNewStatus()) {
             case COMPLETED -> {
@@ -86,7 +83,7 @@ public class WesTaskStatusUpdatedEventHandler {
         logger.info(
                 "Successfully handled task status update: taskId={}, wesTaskId={}, newStatus={}",
                 taskId,
-                wesTaskId,
+                taskId,
                 event.getNewStatus());
     }
 }

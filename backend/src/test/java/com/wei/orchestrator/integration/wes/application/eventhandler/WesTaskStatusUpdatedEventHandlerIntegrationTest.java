@@ -51,10 +51,10 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             List<TaskItem> items = List.of(TaskItem.of("SKU-001", 10, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask.submitToWes(WesTaskId.of(wesTaskId));
-            pickingTask = pickingTaskRepository.save(pickingTask);
+            pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.COMPLETED);
 
             eventHandler.handleWesTaskStatusUpdated(event);
 
@@ -75,7 +75,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.FAILED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.FAILED);
 
             eventHandler.handleWesTaskStatusUpdated(event);
 
@@ -98,7 +98,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.CANCELED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.CANCELED);
 
             eventHandler.handleWesTaskStatusUpdated(event);
 
@@ -121,7 +121,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.IN_PROGRESS);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.IN_PROGRESS);
 
             eventHandler.handleWesTaskStatusUpdated(event);
 
@@ -133,10 +133,10 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
 
         @Test
         void shouldThrowExceptionWhenPickingTaskNotFound() {
-            String wesTaskId = "WES-NON-EXISTENT";
+            String taskId = "task_id";
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(taskId, TaskStatus.COMPLETED);
 
             IllegalStateException exception =
                     assertThrows(
@@ -145,7 +145,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                                 eventHandler.handleWesTaskStatusUpdated(event);
                             });
 
-            assertTrue(exception.getMessage().contains("PickingTask not found for wesTaskId"));
+            assertTrue(exception.getMessage().contains("PickingTask not found for taskId"));
         }
 
         @Test
@@ -159,7 +159,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event1 =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.IN_PROGRESS);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.IN_PROGRESS);
             eventHandler.handleWesTaskStatusUpdated(event1);
 
             Optional<PickingTask> foundTask1 =
@@ -168,7 +168,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             assertEquals(TaskStatus.IN_PROGRESS, foundTask1.get().getStatus());
 
             WesTaskStatusUpdatedEvent event2 =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.COMPLETED);
             eventHandler.handleWesTaskStatusUpdated(event2);
 
             Optional<PickingTask> foundTask2 =
@@ -190,7 +190,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             assertEquals(TaskStatus.SUBMITTED, pickingTask.getStatus());
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.COMPLETED);
             eventHandler.handleWesTaskStatusUpdated(event);
 
             Optional<PickingTask> foundTask =
@@ -212,13 +212,14 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     status -> {
                         List<TaskItem> items = List.of(TaskItem.of("SKU-100", 1, "WH-001"));
                         PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
+                        pickingTask.setTaskId("task_001");
                         pickingTask.submitToWes(WesTaskId.of(wesTaskId));
                         pickingTaskRepository.save(pickingTask);
                         return null;
                     });
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent("task_001", TaskStatus.COMPLETED);
 
             eventHandler.handleWesTaskStatusUpdated(event);
 
@@ -241,9 +242,9 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                         return null;
                     });
 
-            String nonExistentWesTaskId = "WES-NON-EXISTENT";
+            String nonExistentTaskId = "TASK-NON-EXISTENT";
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(nonExistentWesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(nonExistentTaskId, TaskStatus.COMPLETED);
 
             assertThrows(
                     IllegalStateException.class,
@@ -274,7 +275,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.COMPLETED);
             eventHandler.handleWesTaskStatusUpdated(event);
 
             Optional<PickingTask> foundTask =
@@ -295,7 +296,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.FAILED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.FAILED);
             eventHandler.handleWesTaskStatusUpdated(event);
 
             Optional<PickingTask> foundTask =
@@ -316,7 +317,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.CANCELED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.CANCELED);
             eventHandler.handleWesTaskStatusUpdated(event);
 
             Optional<PickingTask> foundTask =
@@ -337,7 +338,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.IN_PROGRESS);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.IN_PROGRESS);
             eventHandler.handleWesTaskStatusUpdated(event);
 
             Optional<PickingTask> foundTask =
@@ -363,7 +364,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.COMPLETED);
 
             eventHandler.handleWesTaskStatusUpdated(event);
             eventHandler.handleWesTaskStatusUpdated(event);
@@ -385,7 +386,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             pickingTask = pickingTaskRepository.save(pickingTask);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.FAILED);
+                    new WesTaskStatusUpdatedEvent(pickingTask.getTaskId(), TaskStatus.FAILED);
 
             eventHandler.handleWesTaskStatusUpdated(event);
             eventHandler.handleWesTaskStatusUpdated(event);
@@ -417,7 +418,8 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     TriggerContext.of("Scheduled:WesObserver", correlationId, null);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.COMPLETED, triggerContext);
+                    new WesTaskStatusUpdatedEvent(
+                            pickingTask.getTaskId(), TaskStatus.COMPLETED, triggerContext);
 
             transactionTemplate.execute(
                     status -> {
@@ -486,7 +488,8 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     TriggerContext.of("Scheduled:WesObserver", correlationId, null);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.FAILED, triggerContext);
+                    new WesTaskStatusUpdatedEvent(
+                            pickingTask.getTaskId(), TaskStatus.FAILED, triggerContext);
 
             transactionTemplate.execute(
                     status -> {
@@ -555,7 +558,8 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     TriggerContext.of("Scheduled:WesObserver", correlationId, null);
 
             WesTaskStatusUpdatedEvent event =
-                    new WesTaskStatusUpdatedEvent(wesTaskId, TaskStatus.CANCELED, triggerContext);
+                    new WesTaskStatusUpdatedEvent(
+                            pickingTask.getTaskId(), TaskStatus.CANCELED, triggerContext);
 
             transactionTemplate.execute(
                     status -> {
