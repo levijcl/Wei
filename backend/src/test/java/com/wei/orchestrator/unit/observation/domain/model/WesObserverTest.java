@@ -7,15 +7,15 @@ import com.wei.orchestrator.observation.domain.event.WesTaskStatusUpdatedEvent;
 import com.wei.orchestrator.observation.domain.model.WesObserver;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.TaskEndpoint;
+import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
+import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
 import com.wei.orchestrator.wes.domain.port.WesPort;
 import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesTaskDto;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -152,7 +152,7 @@ class WesObserverTest {
         WesObserver wesObserver = new WesObserver("observer-1", taskEndpoint, pollingInterval);
         wesObserver.setLastPolledTimestamp(LocalDateTime.now());
 
-        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList(), Collections.emptyMap());
+        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList());
 
         verify(wesPort, never()).pollAllTasks();
         assertTrue(wesObserver.getDomainEvents().isEmpty());
@@ -165,8 +165,7 @@ class WesObserverTest {
         WesObserver wesObserver = new WesObserver("observer-1", taskEndpoint, pollingInterval);
         List<WesTaskDto> mockTasks = createMockWesTasks(2);
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
-
-        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList(), Collections.emptyMap());
+        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList());
 
         verify(wesPort).pollAllTasks();
         assertNotNull(wesObserver.getLastPolledTimestamp());
@@ -182,18 +181,16 @@ class WesObserverTest {
         mockTasks.get(0).setStatus("COMPLETED");
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-        List<String> existingTaskIds = List.of("WES-TASK-001");
-        Map<String, TaskStatus> existingStatuses = new HashMap<>();
-        existingStatuses.put("WES-TASK-001", TaskStatus.IN_PROGRESS);
-
-        wesObserver.pollWesTaskStatus(wesPort, existingTaskIds, existingStatuses);
+        wesObserver.pollWesTaskStatus(
+                wesPort,
+                List.of(createPickingTask("TASK_ID_001", "WES-TASK-001", TaskStatus.IN_PROGRESS)));
 
         List<Object> domainEvents = wesObserver.getDomainEvents();
         assertEquals(1, domainEvents.size());
         assertInstanceOf(WesTaskStatusUpdatedEvent.class, domainEvents.get(0));
 
         WesTaskStatusUpdatedEvent event = (WesTaskStatusUpdatedEvent) domainEvents.get(0);
-        assertEquals("WES-TASK-001", event.getTaskId());
+        assertEquals("TASK_ID_001", event.getTaskId());
         assertEquals(TaskStatus.COMPLETED, event.getNewStatus());
     }
 
@@ -207,11 +204,8 @@ class WesObserverTest {
         mockTasks.get(0).setStatus("IN_PROGRESS");
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-        List<String> existingTaskIds = List.of("WES-TASK-001");
-        Map<String, TaskStatus> existingStatuses = new HashMap<>();
-        existingStatuses.put("WES-TASK-001", TaskStatus.IN_PROGRESS);
-
-        wesObserver.pollWesTaskStatus(wesPort, existingTaskIds, existingStatuses);
+        wesObserver.pollWesTaskStatus(
+                wesPort, List.of(createPickingTask("WES-TASK-001", TaskStatus.IN_PROGRESS)));
 
         assertTrue(wesObserver.getDomainEvents().isEmpty());
     }
@@ -229,13 +223,12 @@ class WesObserverTest {
 
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-        List<String> existingTaskIds = List.of("WES-TASK-001", "WES-TASK-002", "WES-TASK-003");
-        Map<String, TaskStatus> existingStatuses = new HashMap<>();
-        existingStatuses.put("WES-TASK-001", TaskStatus.IN_PROGRESS);
-        existingStatuses.put("WES-TASK-002", TaskStatus.IN_PROGRESS);
-        existingStatuses.put("WES-TASK-003", TaskStatus.PENDING);
-
-        wesObserver.pollWesTaskStatus(wesPort, existingTaskIds, existingStatuses);
+        wesObserver.pollWesTaskStatus(
+                wesPort,
+                List.of(
+                        createPickingTask("WES-TASK-001", TaskStatus.IN_PROGRESS),
+                        createPickingTask("WES-TASK-002", TaskStatus.IN_PROGRESS),
+                        createPickingTask("WES-TASK-003", TaskStatus.PENDING)));
 
         assertEquals(3, wesObserver.getDomainEvents().size());
         for (Object event : wesObserver.getDomainEvents()) {
@@ -251,7 +244,7 @@ class WesObserverTest {
 
         when(wesPort.pollAllTasks()).thenReturn(Collections.emptyList());
 
-        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList(), Collections.emptyMap());
+        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList());
 
         assertTrue(wesObserver.getDomainEvents().isEmpty());
     }
@@ -266,7 +259,7 @@ class WesObserverTest {
         List<WesTaskDto> mockTasks = createMockWesTasks(1);
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList(), Collections.emptyMap());
+        wesObserver.pollWesTaskStatus(wesPort, Collections.emptyList());
 
         assertNotNull(wesObserver.getLastPolledTimestamp());
         assertTrue(
@@ -285,12 +278,11 @@ class WesObserverTest {
         mockTasks.get(1).setStatus("FAILED");
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-        List<String> existingTaskIds = List.of("WES-TASK-001", "WES-TASK-002");
-        Map<String, TaskStatus> existingStatuses = new HashMap<>();
-        existingStatuses.put("WES-TASK-001", TaskStatus.PENDING);
-        existingStatuses.put("WES-TASK-002", TaskStatus.PENDING);
-
-        wesObserver.pollWesTaskStatus(wesPort, existingTaskIds, existingStatuses);
+        wesObserver.pollWesTaskStatus(
+                wesPort,
+                List.of(
+                        createPickingTask("WES-TASK-001", TaskStatus.PENDING),
+                        createPickingTask("WES-TASK-001", TaskStatus.PENDING)));
 
         wesObserver.clearDomainEvents();
 
@@ -307,11 +299,8 @@ class WesObserverTest {
         mockTasks.get(0).setStatus("COMPLETED");
         when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-        List<String> existingTaskIds = List.of("WES-TASK-001");
-        Map<String, TaskStatus> existingStatuses = new HashMap<>();
-        existingStatuses.put("WES-TASK-001", TaskStatus.PENDING);
-
-        wesObserver.pollWesTaskStatus(wesPort, existingTaskIds, existingStatuses);
+        wesObserver.pollWesTaskStatus(
+                wesPort, List.of(createPickingTask("WES-TASK-001", TaskStatus.PENDING)));
 
         List<Object> events = wesObserver.getDomainEvents();
 
@@ -354,5 +343,22 @@ class WesObserverTest {
             tasks.add(task);
         }
         return tasks;
+    }
+
+    private PickingTask createPickingTask(String taskId, String wesTaskId, TaskStatus taskStatus) {
+        var pickingTask = new PickingTask();
+        pickingTask.setWesTaskId(WesTaskId.of(wesTaskId));
+        pickingTask.setStatus(taskStatus);
+        pickingTask.setTaskId(taskId);
+
+        return pickingTask;
+    }
+
+    private PickingTask createPickingTask(String wesTaskId, TaskStatus taskStatus) {
+        var pickingTask = new PickingTask();
+        pickingTask.setWesTaskId(WesTaskId.of(wesTaskId));
+        pickingTask.setStatus(taskStatus);
+
+        return pickingTask;
     }
 }

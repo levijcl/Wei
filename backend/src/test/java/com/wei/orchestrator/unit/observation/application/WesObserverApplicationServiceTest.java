@@ -13,7 +13,9 @@ import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval
 import com.wei.orchestrator.observation.domain.model.valueobject.TaskEndpoint;
 import com.wei.orchestrator.observation.domain.repository.WesObserverRepository;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
+import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
+import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
 import com.wei.orchestrator.wes.domain.port.WesPort;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
 import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesTaskDto;
@@ -101,18 +103,13 @@ class WesObserverApplicationServiceTest {
             WesObserver mockObserver = createMockWesObserver("observer-1");
             PollWesTaskStatusCommand command = new PollWesTaskStatusCommand("observer-1");
 
-            List<String> existingWesTaskIds = List.of("WES-TASK-001");
-            Map<String, TaskStatus> existingTaskStatuses = new HashMap<>();
-            existingTaskStatuses.put("WES-TASK-001", TaskStatus.PENDING);
-
             List<WesTaskDto> mockTasks = createMockWesTasks(1);
             mockTasks.get(0).setStatus("IN_PROGRESS");
 
             when(wesObserverRepository.findById("observer-1"))
                     .thenReturn(Optional.of(mockObserver));
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(existingWesTaskIds);
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(existingTaskStatuses);
+            when(pickingTaskRepository.findAll())
+                    .thenReturn(List.of(createMockPickingTask("WES-TASK-001", TaskStatus.PENDING)));
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
             wesObserverApplicationService.pollWesTaskStatus(
@@ -155,7 +152,6 @@ class WesObserverApplicationServiceTest {
                     command, TriggerContext.scheduled("WesObserver"));
 
             verify(wesObserverRepository).findById("observer-2");
-            verify(pickingTaskRepository, never()).findAllWesTaskIds();
             verify(wesPort, never()).pollAllTasks();
             verify(eventPublisher, never()).publishEvent(any());
         }
@@ -165,20 +161,17 @@ class WesObserverApplicationServiceTest {
             WesObserver mockObserver = createMockWesObserver("observer-3");
             PollWesTaskStatusCommand command = new PollWesTaskStatusCommand("observer-3");
 
-            List<String> existingWesTaskIds = List.of("WES-TASK-001", "WES-TASK-002");
-            Map<String, TaskStatus> existingTaskStatuses = new HashMap<>();
-            existingTaskStatuses.put("WES-TASK-001", TaskStatus.PENDING);
-            existingTaskStatuses.put("WES-TASK-002", TaskStatus.IN_PROGRESS);
-
             List<WesTaskDto> mockTasks = createMockWesTasks(2);
             mockTasks.get(0).setStatus("COMPLETED");
             mockTasks.get(1).setStatus("FAILED");
 
             when(wesObserverRepository.findById("observer-3"))
                     .thenReturn(Optional.of(mockObserver));
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(existingWesTaskIds);
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(existingTaskStatuses);
+            when(pickingTaskRepository.findAll())
+                    .thenReturn(
+                            List.of(
+                                    createMockPickingTask("WES-TASK-001", TaskStatus.PENDING),
+                                    createMockPickingTask("WES-TASK-002", TaskStatus.IN_PROGRESS)));
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
             wesObserverApplicationService.pollWesTaskStatus(
@@ -202,9 +195,8 @@ class WesObserverApplicationServiceTest {
 
             when(wesObserverRepository.findById("observer-4"))
                     .thenReturn(Optional.of(mockObserver));
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(existingWesTaskIds);
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(existingTaskStatuses);
+            when(pickingTaskRepository.findAll())
+                    .thenReturn(List.of(createMockPickingTask("WES-TASK-001", TaskStatus.PENDING)));
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
             wesObserverApplicationService.pollWesTaskStatus(
@@ -219,18 +211,13 @@ class WesObserverApplicationServiceTest {
             WesObserver mockObserver = createMockWesObserver("observer-5");
             PollWesTaskStatusCommand command = new PollWesTaskStatusCommand("observer-5");
 
-            List<String> existingWesTaskIds = List.of("WES-TASK-001");
-            Map<String, TaskStatus> existingTaskStatuses = new HashMap<>();
-            existingTaskStatuses.put("WES-TASK-001", TaskStatus.PENDING);
-
             List<WesTaskDto> mockTasks = createMockWesTasks(1);
             mockTasks.get(0).setStatus("COMPLETED");
 
             when(wesObserverRepository.findById("observer-5"))
                     .thenReturn(Optional.of(mockObserver));
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(existingWesTaskIds);
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(existingTaskStatuses);
+            when(pickingTaskRepository.findAll())
+                    .thenReturn(List.of(createMockPickingTask("WES-TASK-001", TaskStatus.PENDING)));
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
             wesObserverApplicationService.pollWesTaskStatus(
@@ -246,16 +233,13 @@ class WesObserverApplicationServiceTest {
 
             when(wesObserverRepository.findById("observer-6"))
                     .thenReturn(Optional.of(mockObserver));
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(Collections.emptyList());
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(Collections.emptyMap());
+            when(pickingTaskRepository.findAll()).thenReturn(Collections.emptyList());
             when(wesPort.pollAllTasks()).thenReturn(Collections.emptyList());
 
             wesObserverApplicationService.pollWesTaskStatus(
                     command, TriggerContext.scheduled("WesObserver"));
 
-            verify(pickingTaskRepository).findAllWesTaskIds();
-            verify(pickingTaskRepository).findAllTaskStatusesByWesTaskId();
+            verify(pickingTaskRepository).findAll();
         }
     }
 
@@ -271,9 +255,7 @@ class WesObserverApplicationServiceTest {
             when(wesObserverRepository.findAllActive()).thenReturn(activeObservers);
             when(wesObserverRepository.findById("observer-1")).thenReturn(Optional.of(observer1));
             when(wesObserverRepository.findById("observer-2")).thenReturn(Optional.of(observer2));
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(Collections.emptyList());
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(Collections.emptyMap());
+            when(pickingTaskRepository.findAll()).thenReturn(Collections.emptyList());
             when(wesPort.pollAllTasks()).thenReturn(Collections.emptyList());
 
             wesObserverApplicationService.pollAllActiveObservers();
@@ -308,9 +290,7 @@ class WesObserverApplicationServiceTest {
                                         .filter(obs -> obs.getObserverId().equals(id))
                                         .findFirst();
                             });
-            when(pickingTaskRepository.findAllWesTaskIds()).thenReturn(Collections.emptyList());
-            when(pickingTaskRepository.findAllTaskStatusesByWesTaskId())
-                    .thenReturn(Collections.emptyMap());
+            when(pickingTaskRepository.findAll()).thenReturn(Collections.emptyList());
             when(wesPort.pollAllTasks()).thenReturn(Collections.emptyList());
 
             wesObserverApplicationService.pollAllActiveObservers();
@@ -417,6 +397,14 @@ class WesObserverApplicationServiceTest {
                 observerId,
                 new TaskEndpoint("http://localhost:8080/api", "token123"),
                 new PollingInterval(60));
+    }
+
+    private PickingTask createMockPickingTask(String wesTaskId, TaskStatus taskStatus) {
+        PickingTask pickingTask = new PickingTask();
+        pickingTask.setWesTaskId(WesTaskId.of(wesTaskId));
+        pickingTask.setStatus(taskStatus);
+
+        return pickingTask;
     }
 
     private List<WesTaskDto> createMockWesTasks(int count) {

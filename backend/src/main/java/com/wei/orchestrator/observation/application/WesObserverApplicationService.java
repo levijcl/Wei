@@ -8,11 +8,10 @@ import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval
 import com.wei.orchestrator.observation.domain.model.valueobject.TaskEndpoint;
 import com.wei.orchestrator.observation.domain.repository.WesObserverRepository;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
-import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
+import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.port.WesPort;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
 import java.util.List;
-import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,11 +65,9 @@ public class WesObserverApplicationService {
             return;
         }
 
-        List<String> existingWesTaskIds = pickingTaskRepository.findAllWesTaskIds();
-        Map<String, TaskStatus> existingTaskStatuses =
-                pickingTaskRepository.findAllTaskStatusesByWesTaskId();
+        List<PickingTask> allPickingTasks = pickingTaskRepository.findAll();
 
-        wesObserver.pollWesTaskStatus(wesPort, existingWesTaskIds, existingTaskStatuses);
+        wesObserver.pollWesTaskStatus(wesPort, allPickingTasks);
 
         wesObserverRepository.save(wesObserver);
 
