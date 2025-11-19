@@ -120,57 +120,69 @@ public class InventoryApplicationService {
     }
 
     @Transactional
-    public InventoryOperationResultDto consumeReservationForOrder(String orderId) {
+    public List<InventoryOperationResultDto> consumeReservationForOrder(String orderId) {
         List<InventoryTransaction> transactions =
                 inventoryTransactionRepository.findBySourceReferenceId(orderId);
 
-        InventoryTransaction reservationTransaction =
+        List<InventoryTransaction> reservationTransactions =
                 transactions.stream()
                         .filter(t -> t.getExternalReservationId() != null)
                         .filter(t -> t.getStatus().equals(TransactionStatus.COMPLETED))
                         .filter(t -> t.getSource().equals(TransactionSource.ORDER_RESERVATION))
-                        .findFirst()
-                        .orElse(null);
+                        .toList();
 
-        if (reservationTransaction == null) {
-            return InventoryOperationResultDto.failure(
-                    "No valid reservation transaction found for order: " + orderId);
+        if (reservationTransactions.isEmpty()) {
+            return List.of(
+                    InventoryOperationResultDto.failure(
+                            "No valid reservation transaction found for order: " + orderId));
         }
 
-        ConsumeReservationCommand command =
-                new ConsumeReservationCommand(
-                        reservationTransaction.getTransactionId(),
-                        reservationTransaction.getExternalReservationId().getValue(),
-                        orderId);
+        List<InventoryOperationResultDto> resultList = new ArrayList<>();
+        for (InventoryTransaction reservationTransaction : reservationTransactions) {
+            ConsumeReservationCommand command =
+                    new ConsumeReservationCommand(
+                            reservationTransaction.getTransactionId(),
+                            reservationTransaction.getExternalReservationId().getValue(),
+                            orderId);
 
-        return consumeReservation(command);
+            InventoryOperationResultDto result = consumeReservation(command);
+            resultList.add(result);
+        }
+
+        return resultList;
     }
 
     @Transactional
-    public InventoryOperationResultDto releaseReservationForOrder(String orderId, String reason) {
+    public List<InventoryOperationResultDto> releaseReservationForOrder(
+            String orderId, String reason) {
         List<InventoryTransaction> transactions =
                 inventoryTransactionRepository.findBySourceReferenceId(orderId);
 
-        InventoryTransaction reservationTransaction =
+        List<InventoryTransaction> reservationTransactions =
                 transactions.stream()
                         .filter(t -> t.getExternalReservationId() != null)
                         .filter(t -> t.getStatus().equals(TransactionStatus.COMPLETED))
                         .filter(t -> t.getSource().equals(TransactionSource.ORDER_RESERVATION))
-                        .findFirst()
-                        .orElse(null);
+                        .toList();
 
-        if (reservationTransaction == null) {
-            return InventoryOperationResultDto.failure(
-                    "No valid reservation transaction found for order: " + orderId);
+        if (reservationTransactions.isEmpty()) {
+            return List.of(
+                    InventoryOperationResultDto.failure(
+                            "No valid reservation transaction found for order: " + orderId));
         }
 
-        ReleaseReservationCommand command =
-                new ReleaseReservationCommand(
-                        reservationTransaction.getTransactionId(),
-                        reservationTransaction.getExternalReservationId().getValue(),
-                        reason);
+        List<InventoryOperationResultDto> resultList = new ArrayList<>();
+        for (InventoryTransaction reservationTransaction : reservationTransactions) {
+            ReleaseReservationCommand command =
+                    new ReleaseReservationCommand(
+                            reservationTransaction.getTransactionId(),
+                            reservationTransaction.getExternalReservationId().getValue(),
+                            reason);
 
-        return releaseReservation(command);
+            resultList.add(releaseReservation(command));
+        }
+
+        return resultList;
     }
 
     @Transactional
