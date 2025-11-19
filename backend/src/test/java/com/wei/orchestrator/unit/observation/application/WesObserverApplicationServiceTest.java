@@ -12,6 +12,7 @@ import com.wei.orchestrator.observation.domain.model.WesObserver;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.TaskEndpoint;
 import com.wei.orchestrator.observation.domain.repository.WesObserverRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
 import com.wei.orchestrator.wes.domain.port.WesPort;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
@@ -114,7 +115,8 @@ class WesObserverApplicationServiceTest {
                     .thenReturn(existingTaskStatuses);
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-            wesObserverApplicationService.pollWesTaskStatus(command);
+            wesObserverApplicationService.pollWesTaskStatus(
+                    command, TriggerContext.scheduled("WesObserver"));
 
             verify(wesObserverRepository).findById("observer-1");
             verify(wesObserverRepository).save(mockObserver);
@@ -131,7 +133,8 @@ class WesObserverApplicationServiceTest {
                     assertThrows(
                             IllegalArgumentException.class,
                             () -> {
-                                wesObserverApplicationService.pollWesTaskStatus(command);
+                                wesObserverApplicationService.pollWesTaskStatus(
+                                        command, TriggerContext.scheduled("WesObserver"));
                             });
 
             assertTrue(exception.getMessage().contains("WesObserver not found"));
@@ -148,7 +151,8 @@ class WesObserverApplicationServiceTest {
             when(wesObserverRepository.findById("observer-2"))
                     .thenReturn(Optional.of(mockObserver));
 
-            wesObserverApplicationService.pollWesTaskStatus(command);
+            wesObserverApplicationService.pollWesTaskStatus(
+                    command, TriggerContext.scheduled("WesObserver"));
 
             verify(wesObserverRepository).findById("observer-2");
             verify(pickingTaskRepository, never()).findAllWesTaskIds();
@@ -177,7 +181,8 @@ class WesObserverApplicationServiceTest {
                     .thenReturn(existingTaskStatuses);
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-            wesObserverApplicationService.pollWesTaskStatus(command);
+            wesObserverApplicationService.pollWesTaskStatus(
+                    command, TriggerContext.scheduled("WesObserver"));
 
             verify(wesObserverRepository).save(mockObserver);
             verify(eventPublisher, times(2)).publishEvent(any(WesTaskStatusUpdatedEvent.class));
@@ -202,7 +207,8 @@ class WesObserverApplicationServiceTest {
                     .thenReturn(existingTaskStatuses);
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-            wesObserverApplicationService.pollWesTaskStatus(command);
+            wesObserverApplicationService.pollWesTaskStatus(
+                    command, TriggerContext.scheduled("WesObserver"));
 
             verify(wesObserverRepository).save(mockObserver);
             verify(eventPublisher, never()).publishEvent(any(WesTaskStatusUpdatedEvent.class));
@@ -227,7 +233,8 @@ class WesObserverApplicationServiceTest {
                     .thenReturn(existingTaskStatuses);
             when(wesPort.pollAllTasks()).thenReturn(mockTasks);
 
-            wesObserverApplicationService.pollWesTaskStatus(command);
+            wesObserverApplicationService.pollWesTaskStatus(
+                    command, TriggerContext.scheduled("WesObserver"));
 
             assertTrue(mockObserver.getDomainEvents().isEmpty());
         }
@@ -244,7 +251,8 @@ class WesObserverApplicationServiceTest {
                     .thenReturn(Collections.emptyMap());
             when(wesPort.pollAllTasks()).thenReturn(Collections.emptyList());
 
-            wesObserverApplicationService.pollWesTaskStatus(command);
+            wesObserverApplicationService.pollWesTaskStatus(
+                    command, TriggerContext.scheduled("WesObserver"));
 
             verify(pickingTaskRepository).findAllWesTaskIds();
             verify(pickingTaskRepository).findAllTaskStatusesByWesTaskId();

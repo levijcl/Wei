@@ -2,10 +2,12 @@ package com.wei.orchestrator.observation.application;
 
 import com.wei.orchestrator.observation.application.command.CreateWesObserverCommand;
 import com.wei.orchestrator.observation.application.command.PollWesTaskStatusCommand;
+import com.wei.orchestrator.observation.domain.event.WesTaskStatusUpdatedEvent;
 import com.wei.orchestrator.observation.domain.model.WesObserver;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.TaskEndpoint;
 import com.wei.orchestrator.observation.domain.repository.WesObserverRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
 import com.wei.orchestrator.wes.domain.port.WesPort;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
@@ -50,7 +52,7 @@ public class WesObserverApplicationService {
     }
 
     @Transactional
-    public void pollWesTaskStatus(PollWesTaskStatusCommand command) {
+    public void pollWesTaskStatus(PollWesTaskStatusCommand command, TriggerContext triggerContext) {
         WesObserver wesObserver =
                 wesObserverRepository
                         .findById(command.getObserverId())
@@ -72,8 +74,11 @@ public class WesObserverApplicationService {
 
         wesObserverRepository.save(wesObserver);
 
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
         List<Object> domainEvents = wesObserver.getDomainEvents();
-        domainEvents.forEach(eventPublisher::publishEvent);
+        domainEvents.stream()
+                .map(event -> enrichWithTriggerContext(event, context))
+                .forEach(eventPublisher::publishEvent);
 
         wesObserver.clearDomainEvents();
     }
@@ -82,11 +87,21 @@ public class WesObserverApplicationService {
     public void pollAllActiveObservers() {
         List<WesObserver> activeObservers = wesObserverRepository.findAllActive();
 
+        TriggerContext scheduledContext = TriggerContext.scheduled("WesObserver");
+
         for (WesObserver observer : activeObservers) {
             PollWesTaskStatusCommand command =
                     new PollWesTaskStatusCommand(observer.getObserverId());
-            pollWesTaskStatus(command);
+            pollWesTaskStatus(command, scheduledContext);
         }
+    }
+
+    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+        if (event instanceof WesTaskStatusUpdatedEvent original) {
+            return new WesTaskStatusUpdatedEvent(
+                    original.getTaskId(), original.getNewStatus(), triggerContext);
+        }
+        return event;
     }
 
     @Transactional
