@@ -4,6 +4,7 @@ import com.wei.orchestrator.inventory.application.command.*;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
 import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
 import com.wei.orchestrator.inventory.domain.event.InventoryTransactionFailedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationConsumedEvent;
 import com.wei.orchestrator.inventory.domain.event.ReservationFailedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.*;
@@ -55,20 +56,21 @@ public class InventoryApplicationService {
             transaction.markAsReserved(externalReservationId);
             inventoryTransactionRepository.save(transaction);
 
-            publishEventsWithContext(transaction, triggerContext);
+            publishEventsWithContext(transaction, triggerContext, "OrderReadyForFulfillmentEvent");
 
             return InventoryOperationResultDto.success(transaction.getTransactionId());
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
-            publishEventsWithContext(transaction, triggerContext);
+            publishEventsWithContext(transaction, triggerContext, "OrderReadyForFulfillmentEvent");
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public InventoryOperationResultDto consumeReservation(ConsumeReservationCommand command) {
+    public InventoryOperationResultDto consumeReservation(
+            ConsumeReservationCommand command, TriggerContext triggerContext) {
         InventoryTransaction reservationTransaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
@@ -107,20 +109,23 @@ public class InventoryApplicationService {
             consumptionTransaction.complete();
             inventoryTransactionRepository.save(consumptionTransaction);
 
-            publishEvents(consumptionTransaction);
+            publishEventsWithContext(
+                    consumptionTransaction, triggerContext, "PickingTaskCompletedEvent");
 
             return InventoryOperationResultDto.success(consumptionTransaction.getTransactionId());
 
         } catch (Exception e) {
             consumptionTransaction.fail(e.getMessage());
             inventoryTransactionRepository.save(consumptionTransaction);
-            publishEvents(consumptionTransaction);
+            publishEventsWithContext(
+                    consumptionTransaction, triggerContext, "PickingTaskCompletedEvent");
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public List<InventoryOperationResultDto> consumeReservationForOrder(String orderId) {
+    public List<InventoryOperationResultDto> consumeReservationForOrder(
+            String orderId, TriggerContext triggerContext) {
         List<InventoryTransaction> transactions =
                 inventoryTransactionRepository.findBySourceReferenceId(orderId);
 
@@ -145,7 +150,7 @@ public class InventoryApplicationService {
                             reservationTransaction.getExternalReservationId().getValue(),
                             orderId);
 
-            InventoryOperationResultDto result = consumeReservation(command);
+            InventoryOperationResultDto result = consumeReservation(command, triggerContext);
             resultList.add(result);
         }
 
@@ -307,19 +312,20 @@ public class InventoryApplicationService {
     }
 
     private void publishEventsWithContext(
-            InventoryTransaction transaction, TriggerContext triggerContext) {
+            InventoryTransaction transaction, TriggerContext triggerContext, String triggerSource) {
         TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
 
         transaction.getDomainEvents().stream()
-                .map(event -> enrichWithTriggerContext(event, context))
+                .map(event -> enrichWithTriggerContext(event, context, triggerSource))
                 .forEach(eventPublisher::publishEvent);
         transaction.clearDomainEvents();
     }
 
-    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+    private Object enrichWithTriggerContext(
+            Object event, TriggerContext triggerContext, String triggerSource) {
         TriggerContext newContext =
                 TriggerContext.of(
-                        "OrderReadyForFulfillmentEvent",
+                        triggerSource,
                         triggerContext.getCorrelationId(),
                         triggerContext.getTriggerBy());
 
@@ -343,6 +349,13 @@ public class InventoryApplicationService {
                     original.getType(),
                     original.getSource(),
                     original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof ReservationConsumedEvent original) {
+            return new ReservationConsumedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getExternalReservationId(),
                     original.getOccurredAt(),
                     newContext);
         }

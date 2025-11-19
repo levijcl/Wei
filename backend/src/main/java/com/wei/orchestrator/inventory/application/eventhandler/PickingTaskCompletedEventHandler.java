@@ -2,6 +2,7 @@ package com.wei.orchestrator.inventory.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
 import java.util.List;
 import org.slf4j.Logger;
@@ -37,8 +38,11 @@ public class PickingTaskCompletedEventHandler {
             return;
         }
 
+        TriggerContext triggerContext = event.getTriggerContext();
+
         List<InventoryOperationResultDto> results =
-                inventoryApplicationService.consumeReservationForOrder(event.getOrderId());
+                inventoryApplicationService.consumeReservationForOrder(
+                        event.getOrderId(), triggerContext);
         for (InventoryOperationResultDto result : results) {
             if (result.isSuccess()) {
                 logger.info(

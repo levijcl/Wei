@@ -150,7 +150,8 @@ class InventoryApplicationServiceIntegrationTest {
                             reservationTransactionId, "EXT-RES-004", "ORDER-004");
 
             InventoryOperationResultDto consumeResult =
-                    inventoryApplicationService.consumeReservation(consumeCommand);
+                    inventoryApplicationService.consumeReservation(
+                            consumeCommand, TriggerContext.manual());
 
             assertTrue(consumeResult.isSuccess());
             assertNotNull(consumeResult.getTransactionId());
@@ -184,7 +185,9 @@ class InventoryApplicationServiceIntegrationTest {
 
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> inventoryApplicationService.consumeReservation(command));
+                    () ->
+                            inventoryApplicationService.consumeReservation(
+                                    command, TriggerContext.manual()));
 
             verify(inventoryPort, never()).consumeReservation(any());
         }

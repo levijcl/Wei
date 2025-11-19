@@ -42,7 +42,6 @@ public class PickingTaskCanceledEventHandler {
                         event.getOrderId(), event.getReason());
 
         for (InventoryOperationResultDto result : resultList) {
-
             if (result.isSuccess()) {
                 logger.info(
                         "Successfully released reservation for order: {} after picking task: {} was"

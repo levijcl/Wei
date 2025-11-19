@@ -108,7 +108,8 @@ class InventoryApplicationServiceTest {
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.consumeReservation(command);
+                    inventoryApplicationService.consumeReservation(
+                            command, TriggerContext.manual());
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -128,7 +129,9 @@ class InventoryApplicationServiceTest {
 
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> inventoryApplicationService.consumeReservation(command));
+                    () ->
+                            inventoryApplicationService.consumeReservation(
+                                    command, TriggerContext.manual()));
 
             verify(inventoryPort, never()).consumeReservation(any());
         }
@@ -146,7 +149,8 @@ class InventoryApplicationServiceTest {
                     .thenReturn(Optional.of(reservationTransaction));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.consumeReservation(command);
+                    inventoryApplicationService.consumeReservation(
+                            command, TriggerContext.manual());
 
             assertFalse(result.isSuccess());
             assertEquals(
