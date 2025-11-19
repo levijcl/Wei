@@ -2,6 +2,7 @@ package com.wei.orchestrator.order.application;
 
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
 import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
+import com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent;
 import com.wei.orchestrator.order.domain.event.OrderScheduledEvent;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
@@ -108,11 +109,8 @@ public class OrderApplicationService {
 
     private Object enrichOrderReadyForFulfillmentEvent(
             Object event, TriggerContext triggerContext) {
-        if (event
-                instanceof
-                com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent original) {
-            return new com.wei.orchestrator.order.domain.event.OrderReadyForFulfillmentEvent(
-                    original.getOrderId(), triggerContext);
+        if (event instanceof OrderReadyForFulfillmentEvent original) {
+            return new OrderReadyForFulfillmentEvent(original.getOrderId(), triggerContext);
         }
         return event;
     }
