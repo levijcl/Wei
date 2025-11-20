@@ -12,6 +12,7 @@ import com.wei.orchestrator.order.query.OrderQueryService;
 import com.wei.orchestrator.order.query.dto.OrderDetailDto;
 import com.wei.orchestrator.order.query.dto.OrderProcessStatusDto;
 import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
+import com.wei.orchestrator.order.query.dto.ProcessStepDetailDto;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import jakarta.validation.Valid;
 import java.util.Arrays;
@@ -68,6 +69,14 @@ public class OrderController {
             @PathVariable String orderId) {
         OrderProcessStatusDto processStatus = orderQueryService.getOrderProcessStatus(orderId);
         return ResponseEntity.ok(processStatus);
+    }
+
+    @GetMapping("/{orderId}/process-status/steps/{stepNumber}")
+    public ResponseEntity<ProcessStepDetailDto> getOrderProcessStepDetail(
+            @PathVariable String orderId, @PathVariable int stepNumber) {
+        ProcessStepDetailDto stepDetail =
+                orderQueryService.getOrderProcessStepDetail(orderId, stepNumber);
+        return ResponseEntity.ok(stepDetail);
     }
 
     @PostMapping

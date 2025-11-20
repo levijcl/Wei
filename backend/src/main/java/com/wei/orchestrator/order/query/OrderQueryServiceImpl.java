@@ -1,5 +1,9 @@
 package com.wei.orchestrator.order.query;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderEntity;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderLineItemEntity;
@@ -7,6 +11,7 @@ import com.wei.orchestrator.order.query.dto.OrderDetailDto;
 import com.wei.orchestrator.order.query.dto.OrderLineItemDto;
 import com.wei.orchestrator.order.query.dto.OrderProcessStatusDto;
 import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
+import com.wei.orchestrator.order.query.dto.ProcessStepDetailDto;
 import com.wei.orchestrator.order.query.helper.ProcessStep;
 import com.wei.orchestrator.order.query.infrastructure.OrderProcessStatusQueryRepository;
 import com.wei.orchestrator.order.query.infrastructure.OrderQueryRepository;
@@ -34,6 +39,7 @@ public class OrderQueryServiceImpl implements OrderQueryService {
     private final OrderQueryRepository orderQueryRepository;
     private final PickingTaskQueryService pickingTaskQueryService;
     private final OrderProcessStatusQueryRepository processStatusQueryRepository;
+    private final ObjectMapper objectMapper;
 
     public OrderQueryServiceImpl(
             PickingTaskQueryService pickingTaskQueryService,
@@ -42,6 +48,9 @@ public class OrderQueryServiceImpl implements OrderQueryService {
         this.orderQueryRepository = orderQueryRepository;
         this.pickingTaskQueryService = pickingTaskQueryService;
         this.processStatusQueryRepository = processStatusQueryRepository;
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     @Override
@@ -201,5 +210,66 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                             return step.createStepDto(stepEvents);
                         })
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public ProcessStepDetailDto getOrderProcessStepDetail(String orderId, int stepNumber) {
+        if (stepNumber < 1 || stepNumber > 9) {
+            throw new IllegalArgumentException(
+                    "Invalid step number: " + stepNumber + ". Must be between 1 and 9.");
+        }
+
+        ProcessStep step = ProcessStep.values()[stepNumber - 1];
+
+        List<AuditRecordEntity> allRecords =
+                processStatusQueryRepository.findByOrderIdInPayload(orderId);
+
+        List<AuditRecordEntity> stepEvents = step.filterEvents(allRecords);
+
+        OrderProcessStatusDto.ProcessStepDto stepSummary = step.createStepDto(stepEvents);
+
+        List<ProcessStepDetailDto.EventDetailDto> eventDetails =
+                stepEvents.stream()
+                        .sorted(
+                                java.util.Comparator.comparing(
+                                        AuditRecordEntity::getEventTimestamp))
+                        .map(this::mapToEventDetailDto)
+                        .collect(Collectors.toList());
+
+        return new ProcessStepDetailDto(
+                stepNumber, step.getStepName(), stepSummary.getStatus(), eventDetails);
+    }
+
+    private ProcessStepDetailDto.EventDetailDto mapToEventDetailDto(AuditRecordEntity entity) {
+        try {
+            Object parsedPayload = objectMapper.readValue(entity.getPayload(), Object.class);
+
+            ProcessStepDetailDto.EventMetadataDto metadata =
+                    parseEventMetadata(entity.getEventMetadata());
+
+            return new ProcessStepDetailDto.EventDetailDto(
+                    entity.getRecordId(),
+                    entity.getEventName(),
+                    entity.getEventTimestamp(),
+                    metadata,
+                    parsedPayload);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Failed to parse audit record: " + entity.getRecordId(), e);
+        }
+    }
+
+    private ProcessStepDetailDto.EventMetadataDto parseEventMetadata(String metadataJson) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metadataMap = objectMapper.readValue(metadataJson, Map.class);
+
+            return new ProcessStepDetailDto.EventMetadataDto(
+                    (String) metadataMap.get("context"),
+                    (String) metadataMap.get("correlationId"),
+                    (String) metadataMap.get("triggerSource"),
+                    (String) metadataMap.get("triggerBy"));
+        } catch (JsonProcessingException e) {
+            return new ProcessStepDetailDto.EventMetadataDto(null, null, null, null);
+        }
     }
 }

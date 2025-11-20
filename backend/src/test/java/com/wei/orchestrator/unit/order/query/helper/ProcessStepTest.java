@@ -85,7 +85,7 @@ class ProcessStepTest {
             OrderProcessStatusDto.ProcessStepDto dto =
                     ProcessStep.ORDER_SCHEDULED.createStepDto(emptyList);
 
-            assertEquals(2, dto.getStepNumber());
+            assertEquals(1, dto.getStepNumber());
             assertEquals("Order Scheduled", dto.getStepName());
             assertEquals("PENDING", dto.getStatus());
             assertNull(dto.getTimestamp());
@@ -100,7 +100,7 @@ class ProcessStepTest {
             OrderProcessStatusDto.ProcessStepDto dto =
                     ProcessStep.ORDER_SCHEDULED.createStepDto(events);
 
-            assertEquals(2, dto.getStepNumber());
+            assertEquals(1, dto.getStepNumber());
             assertEquals("Order Scheduled", dto.getStepName());
             assertEquals("SUCCESS", dto.getStatus());
             assertEquals(now, dto.getTimestamp());
@@ -115,7 +115,7 @@ class ProcessStepTest {
             OrderProcessStatusDto.ProcessStepDto dto =
                     ProcessStep.INVENTORY_RESERVED.createStepDto(events);
 
-            assertEquals(4, dto.getStepNumber());
+            assertEquals(3, dto.getStepNumber());
             assertEquals("Inventory Reserved", dto.getStepName());
             assertEquals("SUCCESS", dto.getStatus());
             assertEquals(successTime, dto.getTimestamp());
@@ -130,7 +130,7 @@ class ProcessStepTest {
             OrderProcessStatusDto.ProcessStepDto dto =
                     ProcessStep.INVENTORY_RESERVED.createStepDto(events);
 
-            assertEquals(4, dto.getStepNumber());
+            assertEquals(3, dto.getStepNumber());
             assertEquals("Inventory Reserved", dto.getStepName());
             assertEquals("FAILED", dto.getStatus());
             assertEquals(failureTime, dto.getTimestamp());
