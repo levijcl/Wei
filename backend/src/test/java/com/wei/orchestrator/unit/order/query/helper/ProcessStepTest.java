@@ -18,20 +18,6 @@ class ProcessStepTest {
     class FilterEventsTest {
 
         @Test
-        void shouldFilterSingleEventForOrderReceived() {
-            List<AuditRecordEntity> auditRecords = new ArrayList<>();
-            auditRecords.add(createAuditRecord("NewOrderObservedEvent", LocalDateTime.now()));
-            auditRecords.add(createAuditRecord("OrderScheduledEvent", LocalDateTime.now()));
-            auditRecords.add(createAuditRecord("InventoryReservedEvent", LocalDateTime.now()));
-
-            List<AuditRecordEntity> filtered =
-                    ProcessStep.ORDER_RECEIVED.filterEvents(auditRecords);
-
-            assertEquals(1, filtered.size());
-            assertEquals("NewOrderObservedEvent", filtered.get(0).getEventName());
-        }
-
-        @Test
         void shouldFilterSuccessOrFailureEventsForInventoryReserved() {
             List<AuditRecordEntity> auditRecords = new ArrayList<>();
             auditRecords.add(createAuditRecord("OrderScheduledEvent", LocalDateTime.now()));

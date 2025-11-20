@@ -5,36 +5,34 @@ import com.wei.orchestrator.shared.infrastructure.persistence.AuditRecordEntity;
 import java.util.List;
 
 public enum ProcessStep {
-    ORDER_RECEIVED(1, "Order Received", StepEventMatcher.singleEvent("NewOrderObservedEvent")),
-
-    ORDER_SCHEDULED(2, "Order Scheduled", StepEventMatcher.singleEvent("OrderScheduledEvent")),
+    ORDER_SCHEDULED(1, "Order Scheduled", StepEventMatcher.singleEvent("OrderScheduledEvent")),
 
     FULFILLMENT_STARTED(
-            3,
+            2,
             "Fulfillment Started",
             StepEventMatcher.singleEvent("OrderReadyForFulfillmentEvent")),
 
     INVENTORY_RESERVED(
-            4,
+            3,
             "Inventory Reserved",
             StepEventMatcher.successOrFailure("InventoryReservedEvent", "ReservationFailedEvent")),
 
-    ORDER_RESERVED(5, "Order Reserved", StepEventMatcher.singleEvent("OrderReservedEvent")),
+    ORDER_RESERVED(4, "Order Reserved", StepEventMatcher.singleEvent("OrderReservedEvent")),
 
     PICKING_TASK_CREATED(
-            6,
+            5,
             "Picking Task Created",
             StepEventMatcher.successOrFailure("PickingTaskCreatedEvent", "PickingTaskFailedEvent")),
 
     PICKING_TASK_PROCESSING(
-            7,
+            6,
             "Picking Task Processing",
             StepEventMatcher.singleEvent("WesTaskStatusUpdatedEvent")),
 
-    PICKING_TASK_SUBMITTED(8, "Picking Task Submitted", StepEventMatcher.pickingCompleted()),
+    PICKING_TASK_SUBMITTED(7, "Picking Task Submitted", StepEventMatcher.pickingCompleted()),
 
     PICKING_COMPLETED(
-            9, "Picking Completed", StepEventMatcher.singleEvent("ReservationConsumedEvent"));
+            8, "Picking Completed", StepEventMatcher.singleEvent("ReservationConsumedEvent"));
 
     private final int stepNumber;
     private final String stepName;

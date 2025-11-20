@@ -10,6 +10,7 @@ import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.query.OrderQueryService;
 import com.wei.orchestrator.order.query.dto.OrderDetailDto;
+import com.wei.orchestrator.order.query.dto.OrderProcessStatusDto;
 import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import jakarta.validation.Valid;
@@ -60,6 +61,13 @@ public class OrderController {
     public ResponseEntity<OrderDetailDto> getOrderDetail(@PathVariable String orderId) {
         OrderDetailDto orderDetail = orderQueryService.getOrderDetail(orderId);
         return ResponseEntity.ok(orderDetail);
+    }
+
+    @GetMapping("/{orderId}/process-status")
+    public ResponseEntity<OrderProcessStatusDto> getOrderProcessStatus(
+            @PathVariable String orderId) {
+        OrderProcessStatusDto processStatus = orderQueryService.getOrderProcessStatus(orderId);
+        return ResponseEntity.ok(processStatus);
     }
 
     @PostMapping
