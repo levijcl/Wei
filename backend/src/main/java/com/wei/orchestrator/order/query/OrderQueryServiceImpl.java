@@ -5,13 +5,18 @@ import com.wei.orchestrator.order.infrastructure.persistence.OrderEntity;
 import com.wei.orchestrator.order.infrastructure.persistence.OrderLineItemEntity;
 import com.wei.orchestrator.order.query.dto.OrderDetailDto;
 import com.wei.orchestrator.order.query.dto.OrderLineItemDto;
+import com.wei.orchestrator.order.query.dto.OrderProcessStatusDto;
 import com.wei.orchestrator.order.query.dto.OrderSummaryDto;
+import com.wei.orchestrator.order.query.helper.ProcessStep;
+import com.wei.orchestrator.order.query.infrastructure.OrderProcessStatusQueryRepository;
 import com.wei.orchestrator.order.query.infrastructure.OrderQueryRepository;
+import com.wei.orchestrator.shared.infrastructure.persistence.AuditRecordEntity;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
 import com.wei.orchestrator.wes.query.PickingTaskQueryService;
 import com.wei.orchestrator.wes.query.dto.PickingTaskSummaryDto;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,12 +33,15 @@ public class OrderQueryServiceImpl implements OrderQueryService {
 
     private final OrderQueryRepository orderQueryRepository;
     private final PickingTaskQueryService pickingTaskQueryService;
+    private final OrderProcessStatusQueryRepository processStatusQueryRepository;
 
     public OrderQueryServiceImpl(
             PickingTaskQueryService pickingTaskQueryService,
-            OrderQueryRepository orderQueryRepository) {
+            OrderQueryRepository orderQueryRepository,
+            OrderProcessStatusQueryRepository processStatusQueryRepository) {
         this.orderQueryRepository = orderQueryRepository;
         this.pickingTaskQueryService = pickingTaskQueryService;
+        this.processStatusQueryRepository = processStatusQueryRepository;
     }
 
     @Override
@@ -172,5 +180,26 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                 entity.getPrice(),
                 reservationInfo,
                 commitmentInfo);
+    }
+
+    @Override
+    public OrderProcessStatusDto getOrderProcessStatus(String orderId) {
+        List<AuditRecordEntity> auditRecords =
+                processStatusQueryRepository.findByOrderIdInPayload(orderId);
+
+        List<OrderProcessStatusDto.ProcessStepDto> steps = mapToProcessSteps(auditRecords);
+
+        return new OrderProcessStatusDto(orderId, steps);
+    }
+
+    private List<OrderProcessStatusDto.ProcessStepDto> mapToProcessSteps(
+            List<AuditRecordEntity> auditRecords) {
+        return Arrays.stream(ProcessStep.values())
+                .map(
+                        step -> {
+                            List<AuditRecordEntity> stepEvents = step.filterEvents(auditRecords);
+                            return step.createStepDto(stepEvents);
+                        })
+                .collect(Collectors.toList());
     }
 }
