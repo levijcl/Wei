@@ -1,8 +1,16 @@
 package com.wei.orchestrator.integration.wes.application.eventhandler;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
+import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
+import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
+import com.wei.orchestrator.inventory.domain.port.InventoryPort;
+import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.observation.domain.event.WesTaskStatusUpdatedEvent;
+import com.wei.orchestrator.order.domain.model.Order;
+import com.wei.orchestrator.order.domain.model.OrderLineItem;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.shared.domain.model.AuditRecord;
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
@@ -13,6 +21,7 @@ import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
 import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
 import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
@@ -39,6 +49,10 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
     @Autowired private AuditRecordRepository auditRecordRepository;
 
     @Autowired private OrderRepository orderRepository;
+
+    @Autowired private InventoryTransactionRepository inventoryTransactionRepository;
+
+    @MockitoBean private InventoryPort inventoryPort;
 
     @Nested
     class EventPublicationAndHandling {
@@ -409,6 +423,23 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             UUID correlationId = UUID.randomUUID();
             String sku = "SKU-CORR-001";
 
+            Order order =
+                    new Order(orderId, List.of(new OrderLineItem(sku, 10, BigDecimal.TEN)));
+            order.createOrder();
+            order.markReadyForFulfillment();
+            order.reserveLineItem(
+                    order.getOrderLineItems().get(0).getLineItemId(),
+                    "TX-001",
+                    "EXT-001",
+                    "WH-001");
+            order.markItemsAsPickingInProgress(List.of(sku), wesTaskId);
+            orderRepository.save(order);
+
+            InventoryTransaction transaction =
+                    InventoryTransaction.createReservation(orderId, sku, "WH-001", 10);
+            transaction.markAsReserved(ExternalReservationId.of("EXT-001"));
+            inventoryTransactionRepository.save(transaction);
+
             List<TaskItem> items = List.of(TaskItem.of(sku, 10, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask.submitToWes(WesTaskId.of(wesTaskId));
@@ -431,7 +462,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     auditRecordRepository.findByCorrelationId(correlationId);
 
             assertFalse(auditRecords.isEmpty(), "Should have audit records");
-            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+            assertEquals(3, auditRecords.size(), "Should have exactly 3 audit records");
 
             boolean allHaveSameCorrelationId =
                     auditRecords.stream()
@@ -450,6 +481,9 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             assertTrue(
                     eventNames.contains("PickingTaskCompletedEvent"),
                     "Should audit PickingTaskCompletedEvent");
+            assertTrue(
+                    eventNames.contains("ReservationConsumedEvent"),
+                    "Should audit ReservationConsumedEvent");
 
             AuditRecord wesTaskStatusUpdatedRecord =
                     auditRecords.stream()
@@ -471,6 +505,17 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     pickingTaskCompletedRecord.getEventMetadata().getTriggerSource(),
                     "PickingTaskCompletedEvent should have trigger source from"
                             + " WesTaskStatusUpdatedEvent");
+
+            AuditRecord reservationConsumedRecord =
+                    auditRecords.stream()
+                            .filter(r -> "ReservationConsumedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "PickingTaskCompletedEvent",
+                    reservationConsumedRecord.getEventMetadata().getTriggerSource(),
+                    "ReservationConsumedEvent should have trigger source from"
+                            + " PickingTaskCompletedEvent");
         }
 
         @Test
