@@ -1,0 +1,31 @@
+<script setup>
+import OrderTaskDetail from './OrderTaskDetail.vue'
+import TubeSpinner from '@/src/components/TubeSpinner.vue'
+import { useRouter } from 'vue-router'
+const router = useRouter()
+const handleClickBack = () => {
+  router.push('/orders')
+}
+</script>
+<template>
+  <div class="w-196 m-auto">
+    <header class="h-16 flex items-center">
+      <button
+        class="bg-white text-black px-4 rounded h-8 hover:cursor-pointer"
+        @click="() => handleClickBack()"
+      >
+        Back
+      </button>
+    </header>
+    <Suspense>
+      <div>
+        <OrderTaskDetail />
+      </div>
+      <template #fallback>
+        <div class="relative top-64 left-1/2 -trnaslate-1/2 w-24">
+          <TubeSpinner />
+        </div>
+      </template>
+    </Suspense>
+  </div>
+</template>
