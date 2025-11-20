@@ -13,6 +13,7 @@ import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservati
 import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionStatus;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -55,7 +56,7 @@ class InventoryApplicationServiceTest {
                     .thenReturn(externalId);
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -76,7 +77,7 @@ class InventoryApplicationServiceTest {
                     .thenThrow(new InsufficientInventoryException("Insufficient inventory"));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(command, TriggerContext.manual());
 
             assertFalse(result.isSuccess());
             assertNotNull(result.getErrorMessage());
@@ -107,7 +108,8 @@ class InventoryApplicationServiceTest {
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.consumeReservation(command);
+                    inventoryApplicationService.consumeReservation(
+                            command, TriggerContext.manual());
 
             assertTrue(result.isSuccess());
             assertNotNull(result.getTransactionId());
@@ -127,7 +129,9 @@ class InventoryApplicationServiceTest {
 
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> inventoryApplicationService.consumeReservation(command));
+                    () ->
+                            inventoryApplicationService.consumeReservation(
+                                    command, TriggerContext.manual()));
 
             verify(inventoryPort, never()).consumeReservation(any());
         }
@@ -145,7 +149,8 @@ class InventoryApplicationServiceTest {
                     .thenReturn(Optional.of(reservationTransaction));
 
             InventoryOperationResultDto result =
-                    inventoryApplicationService.consumeReservation(command);
+                    inventoryApplicationService.consumeReservation(
+                            command, TriggerContext.manual());
 
             assertFalse(result.isSuccess());
             assertEquals(
@@ -173,7 +178,7 @@ class InventoryApplicationServiceTest {
             when(inventoryTransactionRepository.save(any(InventoryTransaction.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            inventoryApplicationService.releaseReservation(command);
+            inventoryApplicationService.releaseReservation(command, TriggerContext.manual());
 
             verify(inventoryPort).releaseReservation(ExternalReservationId.of("EXT-RES-003"));
             verify(inventoryTransactionRepository).save(any(InventoryTransaction.class));

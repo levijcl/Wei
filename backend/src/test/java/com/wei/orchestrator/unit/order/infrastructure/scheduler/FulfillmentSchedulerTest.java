@@ -50,7 +50,7 @@ class FulfillmentSchedulerTest {
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService)
-                .initiateFulfillment(argThat(cmd -> cmd.getOrderId().equals("ORDER-001")));
+                .initiateFulfillment(argThat(cmd -> cmd.getOrderId().equals("ORDER-001")), any());
         verify(lock).unlock();
     }
 
@@ -67,7 +67,7 @@ class FulfillmentSchedulerTest {
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService, never())
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock).unlock();
     }
 
@@ -83,7 +83,7 @@ class FulfillmentSchedulerTest {
         verify(orderRepository, never())
                 .findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService, never())
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock, never()).unlock();
     }
 
@@ -95,14 +95,15 @@ class FulfillmentSchedulerTest {
                 .thenReturn(List.of(prepareScheduledOrder("ORDER-002")));
         doThrow(new RuntimeException("Failed"))
                 .when(orderApplicationService)
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
 
         fulfillmentScheduler.initiateFulfillment();
 
         verify(lockRegistry).obtain(LOCK_KEY);
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
-        verify(orderApplicationService).initiateFulfillment(any(InitiateFulfillmentCommand.class));
+        verify(orderApplicationService)
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock).unlock();
     }
 
@@ -118,7 +119,7 @@ class FulfillmentSchedulerTest {
         verify(orderRepository, never())
                 .findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService, never())
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock, never()).unlock();
     }
 
@@ -135,7 +136,8 @@ class FulfillmentSchedulerTest {
         verify(lockRegistry).obtain(LOCK_KEY);
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
-        verify(orderApplicationService).initiateFulfillment(any(InitiateFulfillmentCommand.class));
+        verify(orderApplicationService)
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock).unlock();
     }
 
@@ -156,7 +158,7 @@ class FulfillmentSchedulerTest {
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService, times(3))
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock).unlock();
     }
 
@@ -175,7 +177,7 @@ class FulfillmentSchedulerTest {
                 .doThrow(new IllegalStateException("Invalid state"))
                 .doNothing()
                 .when(orderApplicationService)
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
 
         fulfillmentScheduler.initiateFulfillment();
 
@@ -183,7 +185,7 @@ class FulfillmentSchedulerTest {
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService, times(3))
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock).unlock();
     }
 
@@ -202,7 +204,7 @@ class FulfillmentSchedulerTest {
                 .doThrow(new IllegalArgumentException("Order not found"))
                 .doThrow(new RuntimeException("Unexpected error"))
                 .when(orderApplicationService)
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
 
         fulfillmentScheduler.initiateFulfillment();
 
@@ -210,7 +212,7 @@ class FulfillmentSchedulerTest {
         verify(lock).tryLock(1, TimeUnit.SECONDS);
         verify(orderRepository).findScheduledOrdersReadyForFulfillment(any(LocalDateTime.class));
         verify(orderApplicationService, times(3))
-                .initiateFulfillment(any(InitiateFulfillmentCommand.class));
+                .initiateFulfillment(any(InitiateFulfillmentCommand.class), any());
         verify(lock).unlock();
     }
 

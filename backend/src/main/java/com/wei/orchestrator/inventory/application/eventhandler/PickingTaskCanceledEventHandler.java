@@ -2,7 +2,9 @@ package com.wei.orchestrator.inventory.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.domain.event.PickingTaskCanceledEvent;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -36,23 +38,27 @@ public class PickingTaskCanceledEventHandler {
             return;
         }
 
-        InventoryOperationResultDto result =
-                inventoryApplicationService.releaseReservationForOrder(
-                        event.getOrderId(), event.getReason());
+        TriggerContext triggerContext = event.getTriggerContext();
 
-        if (result.isSuccess()) {
-            logger.info(
-                    "Successfully released reservation for order: {} after picking task: {} was"
-                            + " canceled",
-                    event.getOrderId(),
-                    event.getTaskId());
-        } else {
-            logger.error(
-                    "Failed to release reservation for order: {} after picking task: {} was"
-                            + " canceled, error: {}",
-                    event.getOrderId(),
-                    event.getTaskId(),
-                    result.getErrorMessage());
+        List<InventoryOperationResultDto> resultList =
+                inventoryApplicationService.releaseReservationForOrder(
+                        event.getOrderId(), event.getReason(), triggerContext);
+
+        for (InventoryOperationResultDto result : resultList) {
+            if (result.isSuccess()) {
+                logger.info(
+                        "Successfully released reservation for order: {} after picking task: {} was"
+                                + " canceled",
+                        event.getOrderId(),
+                        event.getTaskId());
+            } else {
+                logger.error(
+                        "Failed to release reservation for order: {} after picking task: {} was"
+                                + " canceled, error: {}",
+                        event.getOrderId(),
+                        event.getTaskId(),
+                        result.getErrorMessage());
+            }
         }
     }
 }

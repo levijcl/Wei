@@ -1,7 +1,13 @@
 package com.wei.orchestrator.wes.application;
 
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.application.command.*;
 import com.wei.orchestrator.wes.application.dto.WesOperationResultDto;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCanceledEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskCreatedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskFailedEvent;
+import com.wei.orchestrator.wes.domain.event.PickingTaskSubmittedEvent;
 import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
@@ -31,29 +37,31 @@ public class PickingTaskApplicationService {
 
     @Transactional
     public WesOperationResultDto createPickingTaskForOrder(
-            CreatePickingTaskForOrderCommand command) {
+            CreatePickingTaskForOrderCommand command, TriggerContext triggerContext) {
         List<TaskItem> items =
                 command.getItems().stream()
                         .map(dto -> TaskItem.of(dto.getSku(), dto.getQuantity(), dto.getLocation()))
                         .collect(Collectors.toList());
 
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
         PickingTask pickingTask =
                 PickingTask.createForOrder(command.getOrderId(), items, command.getPriority());
 
-        PickingTask savedTask = pickingTaskRepository.save(pickingTask);
+        pickingTaskRepository.save(pickingTask);
 
         try {
-            WesTaskId wesTaskId = wesPort.submitPickingTask(savedTask);
-            savedTask.submitToWes(wesTaskId);
+            WesTaskId wesTaskId = wesPort.submitPickingTask(pickingTask);
+            pickingTask.submitToWes(wesTaskId);
 
-            pickingTaskRepository.save(savedTask);
-            publishEvents(savedTask);
+            pickingTaskRepository.save(pickingTask);
+            publishEventsWithContext(pickingTask, context, "OrderReservedEvent");
 
-            return WesOperationResultDto.success(savedTask.getTaskId());
+            return WesOperationResultDto.success(pickingTask.getTaskId());
         } catch (Exception e) {
-            savedTask.markFailed(e.getMessage());
-            pickingTaskRepository.save(savedTask);
-            publishEvents(savedTask);
+            pickingTask.markFailed(e.getMessage());
+            pickingTaskRepository.save(pickingTask);
+            publishEventsWithContext(pickingTask, context, "OrderReservedEvent");
 
             return WesOperationResultDto.failure(e.getMessage());
         }
@@ -98,7 +106,7 @@ public class PickingTaskApplicationService {
     }
 
     @Transactional
-    public void markTaskCompleted(MarkTaskCompletedCommand command) {
+    public void markTaskCompleted(MarkTaskCompletedCommand command, TriggerContext triggerContext) {
         PickingTask pickingTask =
                 pickingTaskRepository
                         .findById(command.getTaskId())
@@ -111,11 +119,12 @@ public class PickingTaskApplicationService {
 
         pickingTaskRepository.save(pickingTask);
 
-        publishEvents(pickingTask);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+        publishEventsWithContext(pickingTask, context, "WesTaskStatusUpdatedEvent");
     }
 
     @Transactional
-    public void markTaskFailed(MarkTaskFailedCommand command) {
+    public void markTaskFailed(MarkTaskFailedCommand command, TriggerContext triggerContext) {
         PickingTask pickingTask =
                 pickingTaskRepository
                         .findById(command.getTaskId())
@@ -128,11 +137,12 @@ public class PickingTaskApplicationService {
 
         pickingTaskRepository.save(pickingTask);
 
-        publishEvents(pickingTask);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+        publishEventsWithContext(pickingTask, context, "WesTaskStatusUpdatedEvent");
     }
 
     @Transactional
-    public void markTaskCanceled(MarkTaskCanceledCommand command) {
+    public void markTaskCanceled(MarkTaskCanceledCommand command, TriggerContext triggerContext) {
         PickingTask pickingTask =
                 pickingTaskRepository
                         .findById(command.getTaskId())
@@ -145,7 +155,8 @@ public class PickingTaskApplicationService {
 
         pickingTaskRepository.save(pickingTask);
 
-        publishEvents(pickingTask);
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+        publishEventsWithContext(pickingTask, context, "WesTaskStatusUpdatedEvent");
     }
 
     @Transactional
@@ -172,5 +183,67 @@ public class PickingTaskApplicationService {
     private void publishEvents(PickingTask pickingTask) {
         pickingTask.getDomainEvents().forEach(eventPublisher::publishEvent);
         pickingTask.clearDomainEvents();
+    }
+
+    private void publishEventsWithContext(
+            PickingTask pickingTask, TriggerContext triggerContext, String triggerSource) {
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
+        pickingTask.getDomainEvents().stream()
+                .map(event -> enrichWithTriggerContext(event, context, triggerSource))
+                .forEach(eventPublisher::publishEvent);
+        pickingTask.clearDomainEvents();
+    }
+
+    private Object enrichWithTriggerContext(
+            Object event, TriggerContext triggerContext, String triggerSource) {
+        TriggerContext newContext =
+                TriggerContext.of(
+                        triggerSource,
+                        triggerContext.getCorrelationId(),
+                        triggerContext.getTriggerBy());
+
+        if (event instanceof PickingTaskCreatedEvent original) {
+            return new PickingTaskCreatedEvent(
+                    original.getTaskId(),
+                    original.getOrderId(),
+                    original.getOrigin(),
+                    original.getPriority(),
+                    original.getItems(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskSubmittedEvent original) {
+            return new PickingTaskSubmittedEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrigin(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskFailedEvent original) {
+            return new PickingTaskFailedEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrderId(),
+                    original.getOrigin(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskCompletedEvent original) {
+            return new PickingTaskCompletedEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrderId(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof PickingTaskCanceledEvent original) {
+            return new PickingTaskCanceledEvent(
+                    original.getTaskId(),
+                    original.getWesTaskId(),
+                    original.getOrderId(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        }
+        return event;
     }
 }

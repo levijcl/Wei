@@ -14,6 +14,7 @@ public class PickingTaskSummaryDto {
     private final TaskStatus status;
     private final int itemCount;
     private final LocalDateTime createdAt;
+    private final LocalDateTime canceledAt;
     private final LocalDateTime completedAt;
 
     public PickingTaskSummaryDto(
@@ -25,6 +26,7 @@ public class PickingTaskSummaryDto {
             TaskStatus status,
             int itemCount,
             LocalDateTime createdAt,
+            LocalDateTime canceledAt,
             LocalDateTime completedAt) {
         this.taskId = taskId;
         this.wesTaskId = wesTaskId;
@@ -34,6 +36,7 @@ public class PickingTaskSummaryDto {
         this.status = status;
         this.itemCount = itemCount;
         this.createdAt = createdAt;
+        this.canceledAt = canceledAt;
         this.completedAt = completedAt;
     }
 
@@ -67,6 +70,10 @@ public class PickingTaskSummaryDto {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public LocalDateTime getCanceledAt() {
+        return canceledAt;
     }
 
     public LocalDateTime getCompletedAt() {

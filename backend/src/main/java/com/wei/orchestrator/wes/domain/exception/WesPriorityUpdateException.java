@@ -2,13 +2,6 @@ package com.wei.orchestrator.wes.domain.exception;
 
 import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
 
-/**
- * Exception thrown when updating task priority in WES fails.
- * This includes:
- * - WES server errors during priority update (5xx)
- * - Invalid priority values rejected by WES
- * - Task in a state that doesn't allow priority updates
- */
 public class WesPriorityUpdateException extends WesOperationException {
 
     private final WesTaskId wesTaskId;

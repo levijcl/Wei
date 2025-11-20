@@ -13,6 +13,7 @@ import com.wei.orchestrator.observation.domain.model.valueobject.ObservationResu
 import com.wei.orchestrator.observation.domain.model.valueobject.ObservedOrderItem;
 import com.wei.orchestrator.observation.domain.port.OrderSourcePort;
 import com.wei.orchestrator.observation.domain.repository.OrderObserverRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -119,7 +120,7 @@ class OrderObserverApplicationServiceTest {
             when(orderSourcePort.fetchNewOrders(any(), any()))
                     .thenReturn(createMockObservationResults(2));
 
-            orderObserverApplicationService.pollOrderSource(command);
+            orderObserverApplicationService.pollOrderSource(command, TriggerContext.manual());
 
             verify(orderObserverRepository).findById("observer-1");
             verify(orderObserverRepository).save(mockObserver);
@@ -135,9 +136,9 @@ class OrderObserverApplicationServiceTest {
             IllegalArgumentException exception =
                     assertThrows(
                             IllegalArgumentException.class,
-                            () -> {
-                                orderObserverApplicationService.pollOrderSource(command);
-                            });
+                            () ->
+                                    orderObserverApplicationService.pollOrderSource(
+                                            command, TriggerContext.manual()));
 
             assertTrue(exception.getMessage().contains("OrderObserver not found"));
             verify(orderObserverRepository).findById("non-existent");
@@ -154,7 +155,7 @@ class OrderObserverApplicationServiceTest {
             when(orderSourcePort.fetchNewOrders(any(), any()))
                     .thenReturn(createMockObservationResults(1));
 
-            orderObserverApplicationService.pollOrderSource(command);
+            orderObserverApplicationService.pollOrderSource(command, TriggerContext.manual());
 
             verify(orderObserverRepository).save(mockObserver);
             verify(eventPublisher, times(1)).publishEvent(any(NewOrderObservedEvent.class));
@@ -169,7 +170,7 @@ class OrderObserverApplicationServiceTest {
                     .thenReturn(Optional.of(mockObserver));
             when(orderSourcePort.fetchNewOrders(any(), any())).thenReturn(new ArrayList<>());
 
-            orderObserverApplicationService.pollOrderSource(command);
+            orderObserverApplicationService.pollOrderSource(command, TriggerContext.manual());
 
             verify(orderObserverRepository).save(mockObserver);
             verify(eventPublisher, never()).publishEvent(any(NewOrderObservedEvent.class));
@@ -185,7 +186,7 @@ class OrderObserverApplicationServiceTest {
             when(orderSourcePort.fetchNewOrders(any(), any()))
                     .thenReturn(createMockObservationResults(3));
 
-            orderObserverApplicationService.pollOrderSource(command);
+            orderObserverApplicationService.pollOrderSource(command, TriggerContext.manual());
 
             assertTrue(mockObserver.getDomainEvents().isEmpty());
         }
@@ -247,9 +248,7 @@ class OrderObserverApplicationServiceTest {
             IllegalArgumentException exception =
                     assertThrows(
                             IllegalArgumentException.class,
-                            () -> {
-                                orderObserverApplicationService.activateObserver("non-existent");
-                            });
+                            () -> orderObserverApplicationService.activateObserver("non-existent"));
 
             assertTrue(exception.getMessage().contains("OrderObserver not found"));
         }
@@ -278,9 +277,9 @@ class OrderObserverApplicationServiceTest {
             IllegalArgumentException exception =
                     assertThrows(
                             IllegalArgumentException.class,
-                            () -> {
-                                orderObserverApplicationService.deactivateObserver("non-existent");
-                            });
+                            () ->
+                                    orderObserverApplicationService.deactivateObserver(
+                                            "non-existent"));
 
             assertTrue(exception.getMessage().contains("OrderObserver not found"));
         }

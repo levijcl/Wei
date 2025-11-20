@@ -2,11 +2,13 @@ package com.wei.orchestrator.observation.application;
 
 import com.wei.orchestrator.observation.application.command.CreateOrderObserverCommand;
 import com.wei.orchestrator.observation.application.command.PollOrderSourceCommand;
+import com.wei.orchestrator.observation.domain.event.NewOrderObservedEvent;
 import com.wei.orchestrator.observation.domain.model.OrderObserver;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.SourceEndpoint;
 import com.wei.orchestrator.observation.domain.port.OrderSourcePort;
 import com.wei.orchestrator.observation.domain.repository.OrderObserverRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -45,7 +47,7 @@ public class OrderObserverApplicationService {
     }
 
     @Transactional
-    public void pollOrderSource(PollOrderSourceCommand command) {
+    public void pollOrderSource(PollOrderSourceCommand command, TriggerContext triggerContext) {
         OrderObserver orderObserver =
                 orderObserverRepository
                         .findById(command.getObserverId())
@@ -56,22 +58,33 @@ public class OrderObserverApplicationService {
                                                         + command.getObserverId()));
 
         orderObserver.pollOrderSource(orderSourcePort);
-
         orderObserverRepository.save(orderObserver);
 
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
         List<Object> domainEvents = orderObserver.getDomainEvents();
-        domainEvents.forEach(eventPublisher::publishEvent);
-
+        domainEvents.stream()
+                .map(event -> enrichWithTriggerContext(event, context))
+                .forEach(eventPublisher::publishEvent);
         orderObserver.clearDomainEvents();
+    }
+
+    private Object enrichWithTriggerContext(Object event, TriggerContext triggerContext) {
+        if (event instanceof NewOrderObservedEvent original) {
+            return new NewOrderObservedEvent(
+                    original.getObserverId(), original.getObservedOrder(), triggerContext);
+        }
+        return event;
     }
 
     @Transactional
     public void pollAllActiveObservers() {
         List<OrderObserver> activeObservers = orderObserverRepository.findAllActive();
 
+        TriggerContext scheduledContext = TriggerContext.scheduled("OrderObserver");
+
         for (OrderObserver observer : activeObservers) {
             PollOrderSourceCommand command = new PollOrderSourceCommand(observer.getObserverId());
-            pollOrderSource(command);
+            pollOrderSource(command, scheduledContext);
         }
     }
 

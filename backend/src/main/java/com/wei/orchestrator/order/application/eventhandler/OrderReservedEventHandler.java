@@ -64,7 +64,8 @@ public class OrderReservedEventHandler {
                 new CreatePickingTaskForOrderCommand(orderId, taskItems, 5);
 
         WesOperationResultDto result =
-                pickingTaskApplicationService.createPickingTaskForOrder(command);
+                pickingTaskApplicationService.createPickingTaskForOrder(
+                        command, event.getTriggerContext());
 
         if (!result.isSuccess()) {
             logger.error(

@@ -3,16 +3,17 @@ package com.wei.orchestrator.unit.wes.query;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.wei.orchestrator.wes.domain.model.PickingTask;
-import com.wei.orchestrator.wes.domain.model.valueobject.TaskItem;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
-import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
-import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
 import com.wei.orchestrator.wes.query.PickingTaskQueryServiceImpl;
 import com.wei.orchestrator.wes.query.dto.PickingTaskDetailDto;
 import com.wei.orchestrator.wes.query.dto.PickingTaskSummaryDto;
+import com.wei.orchestrator.wes.query.infrastructure.PickingTaskQueryRepository;
+import java.math.BigInteger;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,7 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PickingTaskQueryServiceTest {
 
-    @Mock private PickingTaskRepository pickingTaskRepository;
+    @Mock private PickingTaskQueryRepository pickingTaskQueryRepository;
 
     @InjectMocks private PickingTaskQueryServiceImpl pickingTaskQueryService;
 
@@ -31,15 +32,26 @@ class PickingTaskQueryServiceTest {
     class getPickingTaskTest {
         @Test
         void shouldGetPickingTaskSuccessfully() {
-            PickingTask task = mock(PickingTask.class);
-            when(task.getTaskId()).thenReturn("TASK_001");
-            when(task.getWesTaskId()).thenReturn(WesTaskId.of("WES_TASK_001"));
-            when(task.getOrderId()).thenReturn("ORDER_001");
-            when(task.getStatus()).thenReturn(TaskStatus.SUBMITTED);
-            when(task.getPriority()).thenReturn(5);
-            when(task.getItems()).thenReturn(List.of(TaskItem.of("SKU001", 10, "WH001")));
+            LocalDateTime createdAt = LocalDateTime.now();
+            Object[] row =
+                    new Object[] {
+                        "TASK_001",
+                        "WES_TASK_001",
+                        "ORDER_001",
+                        "ORCHESTRATOR_SUBMITTED",
+                        5,
+                        "SUBMITTED",
+                        Timestamp.valueOf(createdAt),
+                        null,
+                        null,
+                        null,
+                        "SKU001",
+                        10,
+                        "WH001"
+                    };
 
-            when(pickingTaskRepository.findById("TASK_001")).thenReturn(Optional.of(task));
+            when(pickingTaskQueryRepository.findTaskDetailById("TASK_001"))
+                    .thenReturn((new ArrayList<Object[]>(Collections.singleton(row))));
 
             PickingTaskDetailDto result = pickingTaskQueryService.getPickingTask("TASK_001");
 
@@ -48,13 +60,18 @@ class PickingTaskQueryServiceTest {
             assertEquals("WES_TASK_001", result.getWesTaskId());
             assertEquals("ORDER_001", result.getOrderId());
             assertEquals(TaskStatus.SUBMITTED, result.getStatus());
+            assertEquals(5, result.getPriority());
             assertEquals(1, result.getItems().size());
-            verify(pickingTaskRepository).findById("TASK_001");
+            assertEquals("SKU001", result.getItems().get(0).getSku());
+            assertEquals(10, result.getItems().get(0).getQuantity());
+            assertEquals("WH001", result.getItems().get(0).getLocation());
+            verify(pickingTaskQueryRepository).findTaskDetailById("TASK_001");
         }
 
         @Test
         void shouldThrowExceptionWhenTaskNotFound() {
-            when(pickingTaskRepository.findById("NON_EXISTENT")).thenReturn(Optional.empty());
+            when(pickingTaskQueryRepository.findTaskDetailById("NON_EXISTENT"))
+                    .thenReturn(List.of());
 
             IllegalArgumentException exception =
                     assertThrows(
@@ -66,15 +83,42 @@ class PickingTaskQueryServiceTest {
 
         @Test
         void shouldMapTaskItemsCorrectly() {
-            PickingTask task = mock(PickingTask.class);
-            when(task.getTaskId()).thenReturn("TASK_002");
-            when(task.getItems())
-                    .thenReturn(
-                            List.of(
-                                    TaskItem.of("SKU100", 5, "A-01-01"),
-                                    TaskItem.of("SKU101", 3, "A-01-02")));
+            LocalDateTime createdAt = LocalDateTime.now();
+            Object[] row1 =
+                    new Object[] {
+                        "TASK_002",
+                        "WES_TASK_002",
+                        "ORDER_002",
+                        "ORCHESTRATOR_SUBMITTED",
+                        3,
+                        "PENDING",
+                        Timestamp.valueOf(createdAt),
+                        null,
+                        null,
+                        null,
+                        "SKU100",
+                        5,
+                        "A-01-01"
+                    };
+            Object[] row2 =
+                    new Object[] {
+                        "TASK_002",
+                        "WES_TASK_002",
+                        "ORDER_002",
+                        "ORCHESTRATOR_SUBMITTED",
+                        3,
+                        "PENDING",
+                        Timestamp.valueOf(createdAt),
+                        null,
+                        null,
+                        null,
+                        "SKU101",
+                        3,
+                        "A-01-02"
+                    };
 
-            when(pickingTaskRepository.findById("TASK_002")).thenReturn(Optional.of(task));
+            when(pickingTaskQueryRepository.findTaskDetailById("TASK_002"))
+                    .thenReturn(List.of(row1, row2));
 
             PickingTaskDetailDto result = pickingTaskQueryService.getPickingTask("TASK_002");
 
@@ -82,20 +126,39 @@ class PickingTaskQueryServiceTest {
             assertEquals("SKU100", result.getItems().get(0).getSku());
             assertEquals(5, result.getItems().get(0).getQuantity());
             assertEquals("A-01-01", result.getItems().get(0).getLocation());
+            assertEquals("SKU101", result.getItems().get(1).getSku());
+            assertEquals(3, result.getItems().get(1).getQuantity());
+            assertEquals("A-01-02", result.getItems().get(1).getLocation());
         }
 
         @Test
         void shouldHandleNullWesTaskId() {
-            PickingTask task = mock(PickingTask.class);
-            when(task.getTaskId()).thenReturn("TASK_003");
-            when(task.getWesTaskId()).thenReturn(null);
-            when(task.getItems()).thenReturn(List.of(TaskItem.of("SKU200", 8, "B-01-01")));
+            LocalDateTime createdAt = LocalDateTime.now();
+            Object[] row =
+                    new Object[] {
+                        "TASK_003",
+                        null,
+                        "ORDER_003",
+                        "ORCHESTRATOR_SUBMITTED",
+                        2,
+                        "PENDING",
+                        Timestamp.valueOf(createdAt),
+                        null,
+                        null,
+                        null,
+                        "SKU200",
+                        8,
+                        "B-01-01"
+                    };
 
-            when(pickingTaskRepository.findById("TASK_003")).thenReturn(Optional.of(task));
+            when(pickingTaskQueryRepository.findTaskDetailById("TASK_003"))
+                    .thenReturn((new ArrayList<Object[]>(Collections.singleton(row))));
 
             PickingTaskDetailDto result = pickingTaskQueryService.getPickingTask("TASK_003");
 
             assertNull(result.getWesTaskId());
+            assertEquals("TASK_003", result.getTaskId());
+            assertEquals("ORDER_003", result.getOrderId());
         }
     }
 
@@ -103,24 +166,39 @@ class PickingTaskQueryServiceTest {
     class getPickingTasksByOrderIdTest {
         @Test
         void shouldGetAllTasksByOrderId() {
-            PickingTask task1 = mock(PickingTask.class);
-            when(task1.getTaskId()).thenReturn("TASK_001");
-            when(task1.getOrderId()).thenReturn("ORDER_001");
-            when(task1.getStatus()).thenReturn(TaskStatus.PENDING);
-            when(task1.getItems()).thenReturn(List.of(TaskItem.of("SKU001", 10, "WH001")));
+            LocalDateTime createdAt1 = LocalDateTime.now().minusHours(2);
+            LocalDateTime createdAt2 = LocalDateTime.now().minusHours(1);
 
-            PickingTask task2 = mock(PickingTask.class);
-            when(task2.getTaskId()).thenReturn("TASK_002");
-            when(task2.getOrderId()).thenReturn("ORDER_001");
-            when(task2.getStatus()).thenReturn(TaskStatus.SUBMITTED);
-            when(task2.getItems())
-                    .thenReturn(
-                            List.of(
-                                    TaskItem.of("SKU002", 5, "WH002"),
-                                    TaskItem.of("SKU003", 3, "WH003")));
+            Object[] row1 =
+                    new Object[] {
+                        "TASK_001",
+                        "WES_001",
+                        "ORDER_001",
+                        "ORCHESTRATOR_SUBMITTED",
+                        3,
+                        "PENDING",
+                        Timestamp.valueOf(createdAt1),
+                        null,
+                        null,
+                        BigInteger.valueOf(1)
+                    };
 
-            when(pickingTaskRepository.findByOrderId("ORDER_001"))
-                    .thenReturn(List.of(task1, task2));
+            Object[] row2 =
+                    new Object[] {
+                        "TASK_002",
+                        "WES_002",
+                        "ORDER_001",
+                        "ORCHESTRATOR_SUBMITTED",
+                        5,
+                        "SUBMITTED",
+                        Timestamp.valueOf(createdAt2),
+                        null,
+                        null,
+                        BigInteger.valueOf(2)
+                    };
+
+            when(pickingTaskQueryRepository.findTaskSummariesByOrderId("ORDER_001"))
+                    .thenReturn(List.of(row1, row2));
 
             List<PickingTaskSummaryDto> results =
                     pickingTaskQueryService.getPickingTasksByOrderId("ORDER_001");
@@ -132,12 +210,13 @@ class PickingTaskQueryServiceTest {
             assertEquals(1, results.get(0).getItemCount());
             assertEquals("TASK_002", results.get(1).getTaskId());
             assertEquals(2, results.get(1).getItemCount());
-            verify(pickingTaskRepository).findByOrderId("ORDER_001");
+            verify(pickingTaskQueryRepository).findTaskSummariesByOrderId("ORDER_001");
         }
 
         @Test
         void shouldReturnEmptyListWhenNoTasksFound() {
-            when(pickingTaskRepository.findByOrderId("ORDER_999")).thenReturn(List.of());
+            when(pickingTaskQueryRepository.findTaskSummariesByOrderId("ORDER_999"))
+                    .thenReturn(List.of());
 
             List<PickingTaskSummaryDto> results =
                     pickingTaskQueryService.getPickingTasksByOrderId("ORDER_999");
@@ -148,17 +227,23 @@ class PickingTaskQueryServiceTest {
 
         @Test
         void shouldMapItemCountCorrectly() {
-            PickingTask task = mock(PickingTask.class);
-            when(task.getTaskId()).thenReturn("TASK_100");
-            when(task.getOrderId()).thenReturn("ORDER_100");
-            when(task.getItems())
-                    .thenReturn(
-                            List.of(
-                                    TaskItem.of("SKU1", 1, "L1"),
-                                    TaskItem.of("SKU2", 2, "L2"),
-                                    TaskItem.of("SKU3", 3, "L3")));
+            LocalDateTime createdAt = LocalDateTime.now();
+            Object[] row =
+                    new Object[] {
+                        "TASK_100",
+                        "WES_100",
+                        "ORDER_100",
+                        "ORCHESTRATOR_SUBMITTED",
+                        4,
+                        "PENDING",
+                        Timestamp.valueOf(createdAt),
+                        null,
+                        null,
+                        BigInteger.valueOf(3)
+                    };
 
-            when(pickingTaskRepository.findByOrderId("ORDER_100")).thenReturn(List.of(task));
+            when(pickingTaskQueryRepository.findTaskSummariesByOrderId("ORDER_100"))
+                    .thenReturn((new ArrayList<Object[]>(Collections.singleton(row))));
 
             List<PickingTaskSummaryDto> results =
                     pickingTaskQueryService.getPickingTasksByOrderId("ORDER_100");

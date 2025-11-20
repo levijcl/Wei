@@ -1,31 +1,15 @@
 package com.wei.orchestrator.order.query.dto;
 
-import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import java.time.LocalDateTime;
 
 public class OrderSummaryDto {
 
     private String orderId;
-    private OrderStatus status;
+    private String status;
     private LocalDateTime scheduledPickupTime;
     private String carrier;
     private String trackingNumber;
     private String description;
-
-    public OrderSummaryDto() {}
-
-    public OrderSummaryDto(
-            String orderId,
-            String status,
-            LocalDateTime scheduledPickupTime,
-            String carrier,
-            String trackingNumber) {
-        this.orderId = orderId;
-        this.status = OrderStatus.valueOf(status);
-        this.scheduledPickupTime = scheduledPickupTime;
-        this.carrier = carrier;
-        this.trackingNumber = trackingNumber;
-    }
 
     public OrderSummaryDto(
             String orderId,
@@ -36,7 +20,7 @@ public class OrderSummaryDto {
             Long lineCount,
             Long totalQuantity) {
         this.orderId = orderId;
-        this.status = OrderStatus.valueOf(status);
+        this.status = status;
         this.scheduledPickupTime = scheduledPickupTime;
         this.carrier = carrier;
         this.trackingNumber = trackingNumber;
@@ -51,11 +35,11 @@ public class OrderSummaryDto {
         this.orderId = orderId;
     }
 
-    public OrderStatus getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    public void setStatus(OrderStatus status) {
+    public void setStatus(String status) {
         this.status = status;
     }
 

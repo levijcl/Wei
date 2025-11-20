@@ -10,6 +10,7 @@ import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
 import com.wei.orchestrator.order.infrastructure.scheduler.FulfillmentScheduler;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -276,6 +277,6 @@ class FulfillmentSchedulerIntegrationTest {
         CreateOrderCommand command =
                 new CreateOrderCommand(orderId, items, scheduledPickupTime, leadTime);
 
-        return orderApplicationService.createOrder(command);
+        return orderApplicationService.createOrder(command, TriggerContext.manual());
     }
 }

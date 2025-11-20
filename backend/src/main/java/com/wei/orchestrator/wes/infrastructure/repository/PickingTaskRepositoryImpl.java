@@ -6,9 +6,7 @@ import com.wei.orchestrator.wes.domain.repository.PickingTaskRepository;
 import com.wei.orchestrator.wes.infrastructure.mapper.PickingTaskMapper;
 import com.wei.orchestrator.wes.infrastructure.persistence.PickingTaskEntity;
 import com.wei.orchestrator.wes.infrastructure.persistence.TaskItemEntity;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -58,8 +56,8 @@ public class PickingTaskRepositoryImpl implements PickingTaskRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PickingTask> findAll() {
-        List<PickingTaskEntity> entities = jpaPickingTaskRepository.findAll();
+    public List<PickingTask> findByOrderId(String orderId) {
+        List<PickingTaskEntity> entities = jpaPickingTaskRepository.findByOrderId(orderId);
         return entities.stream()
                 .map(
                         entity -> {
@@ -71,9 +69,8 @@ public class PickingTaskRepositoryImpl implements PickingTaskRepository {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<PickingTask> findByOrderId(String orderId) {
-        List<PickingTaskEntity> entities = jpaPickingTaskRepository.findByOrderId(orderId);
+    public List<PickingTask> findAll() {
+        List<PickingTaskEntity> entities = jpaPickingTaskRepository.findAll();
         return entities.stream()
                 .map(
                         entity -> {
@@ -117,39 +114,5 @@ public class PickingTaskRepositoryImpl implements PickingTaskRepository {
     public void deleteById(String taskId) {
         jpaTaskItemRepository.deleteByTaskId(taskId);
         jpaPickingTaskRepository.deleteById(taskId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existsById(String taskId) {
-        return jpaPickingTaskRepository.existsById(taskId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean existsByWesTaskId(String wesTaskId) {
-        return jpaPickingTaskRepository.existsByWesTaskId(wesTaskId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<String> findAllWesTaskIds() {
-        return jpaPickingTaskRepository.findAll().stream()
-                .map(PickingTaskEntity::getWesTaskId)
-                .filter(wesTaskId -> wesTaskId != null && !wesTaskId.trim().isEmpty())
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, TaskStatus> findAllTaskStatusesByWesTaskId() {
-        Map<String, TaskStatus> statusMap = new HashMap<>();
-        List<PickingTaskEntity> entities = jpaPickingTaskRepository.findAll();
-        for (PickingTaskEntity entity : entities) {
-            if (entity.getWesTaskId() != null && !entity.getWesTaskId().trim().isEmpty()) {
-                statusMap.put(entity.getWesTaskId(), entity.getStatus());
-            }
-        }
-        return statusMap;
     }
 }

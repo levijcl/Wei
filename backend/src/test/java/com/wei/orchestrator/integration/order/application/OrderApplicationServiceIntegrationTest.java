@@ -9,6 +9,7 @@ import com.wei.orchestrator.order.application.eventhandler.OrderReadyForFulfillm
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.valueobject.OrderStatus;
 import com.wei.orchestrator.order.domain.repository.OrderRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -46,7 +47,8 @@ class OrderApplicationServiceIntegrationTest {
 
             CreateOrderCommand command = new CreateOrderCommand("ORDER-001", items);
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals("ORDER-001", createdOrder.getOrderId());
@@ -71,7 +73,8 @@ class OrderApplicationServiceIntegrationTest {
 
             CreateOrderCommand command = new CreateOrderCommand("ORDER-002", items);
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertEquals(3, createdOrder.getOrderLineItems().size());
             assertEquals("SKU-100", createdOrder.getOrderLineItems().get(0).getSku());
@@ -93,7 +96,7 @@ class OrderApplicationServiceIntegrationTest {
 
             CreateOrderCommand command = new CreateOrderCommand("ORDER-004", items);
 
-            orderApplicationService.createOrder(command);
+            orderApplicationService.createOrder(command, TriggerContext.manual());
 
             Optional<Order> persistedOrder = orderRepository.findById("ORDER-004");
             assertTrue(persistedOrder.isPresent());
@@ -117,8 +120,8 @@ class OrderApplicationServiceIntegrationTest {
                     new CreateOrderCommand.OrderLineItemDto("SKU-501", 2, new BigDecimal("20.00")));
             CreateOrderCommand command2 = new CreateOrderCommand("ORDER-006", items2);
 
-            Order order1 = orderApplicationService.createOrder(command1);
-            Order order2 = orderApplicationService.createOrder(command2);
+            Order order1 = orderApplicationService.createOrder(command1, TriggerContext.manual());
+            Order order2 = orderApplicationService.createOrder(command2, TriggerContext.manual());
 
             assertNotNull(order1);
             assertNotNull(order2);
@@ -141,7 +144,7 @@ class OrderApplicationServiceIntegrationTest {
 
             CreateOrderCommand command = new CreateOrderCommand("ORDER-007", items);
 
-            orderApplicationService.createOrder(command);
+            orderApplicationService.createOrder(command, TriggerContext.manual());
 
             Optional<Order> persistedOrder = orderRepository.findById("ORDER-007");
             assertTrue(persistedOrder.isPresent());
@@ -158,7 +161,7 @@ class OrderApplicationServiceIntegrationTest {
                     new CreateOrderCommand.OrderLineItemDto("SKU-800", 5, new BigDecimal("50.00")));
             CreateOrderCommand command1 = new CreateOrderCommand("ORDER-DUPLICATE", items1);
 
-            orderApplicationService.createOrder(command1);
+            orderApplicationService.createOrder(command1, TriggerContext.manual());
 
             List<CreateOrderCommand.OrderLineItemDto> items2 = new ArrayList<>();
             items2.add(
@@ -170,7 +173,8 @@ class OrderApplicationServiceIntegrationTest {
                             com.wei.orchestrator.order.domain.exception.OrderAlreadyExistsException
                                     .class,
                             () -> {
-                                orderApplicationService.createOrder(command2);
+                                orderApplicationService.createOrder(
+                                        command2, TriggerContext.manual());
                             });
 
             assertTrue(exception.getMessage().contains("ORDER-DUPLICATE"));
@@ -187,7 +191,8 @@ class OrderApplicationServiceIntegrationTest {
             CreateOrderCommand command =
                     new CreateOrderCommand("ORDER-SCHEDULED-001", items, futurePickupTime, null);
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals(OrderStatus.SCHEDULED, createdOrder.getStatus());
@@ -212,7 +217,8 @@ class OrderApplicationServiceIntegrationTest {
             CreateOrderCommand command =
                     new CreateOrderCommand("ORDER-IMMEDIATE-001", items, pastPickupTime, null);
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals(OrderStatus.AWAITING_FULFILLMENT, createdOrder.getStatus());
@@ -236,7 +242,8 @@ class OrderApplicationServiceIntegrationTest {
                     new CreateOrderCommand(
                             "ORDER-CUSTOM-LEAD-001", items, futurePickupTime, customLeadTime);
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals(OrderStatus.SCHEDULED, createdOrder.getStatus());
@@ -258,7 +265,8 @@ class OrderApplicationServiceIntegrationTest {
             CreateOrderCommand command =
                     new CreateOrderCommand("ORDER-DEFAULT-LEAD-001", items, futurePickupTime, null);
 
-            Order createdOrder = orderApplicationService.createOrder(command);
+            Order createdOrder =
+                    orderApplicationService.createOrder(command, TriggerContext.manual());
 
             assertNotNull(createdOrder);
             assertEquals(OrderStatus.SCHEDULED, createdOrder.getStatus());
@@ -281,7 +289,7 @@ class OrderApplicationServiceIntegrationTest {
             CreateOrderCommand command =
                     new CreateOrderCommand("ORDER-PERSIST-001", items, scheduledTime, leadTime);
 
-            orderApplicationService.createOrder(command);
+            orderApplicationService.createOrder(command, TriggerContext.manual());
 
             Optional<Order> persistedOrder = orderRepository.findById("ORDER-PERSIST-001");
             assertTrue(persistedOrder.isPresent());
@@ -308,7 +316,7 @@ class OrderApplicationServiceIntegrationTest {
             CreateOrderCommand createCommand =
                     new CreateOrderCommand("ORDER-INITIATE-001", items, futurePickupTime, null);
 
-            orderApplicationService.createOrder(createCommand);
+            orderApplicationService.createOrder(createCommand, TriggerContext.manual());
 
             Optional<Order> scheduledOrder = orderRepository.findById("ORDER-INITIATE-001");
             assertTrue(scheduledOrder.isPresent());
@@ -316,7 +324,7 @@ class OrderApplicationServiceIntegrationTest {
 
             InitiateFulfillmentCommand initiateCommand =
                     new InitiateFulfillmentCommand("ORDER-INITIATE-001");
-            orderApplicationService.initiateFulfillment(initiateCommand);
+            orderApplicationService.initiateFulfillment(initiateCommand, TriggerContext.manual());
 
             Optional<Order> awaitingOrder = orderRepository.findById("ORDER-INITIATE-001");
             assertTrue(awaitingOrder.isPresent());
@@ -331,7 +339,7 @@ class OrderApplicationServiceIntegrationTest {
                             "SKU-1001", 5, new BigDecimal("50.00")));
 
             CreateOrderCommand createCommand = new CreateOrderCommand("ORDER-INITIATE-002", items);
-            orderApplicationService.createOrder(createCommand);
+            orderApplicationService.createOrder(createCommand, TriggerContext.manual());
 
             Optional<Order> createdOrder = orderRepository.findById("ORDER-INITIATE-002");
             assertTrue(createdOrder.isPresent());
@@ -339,7 +347,7 @@ class OrderApplicationServiceIntegrationTest {
 
             InitiateFulfillmentCommand initiateCommand =
                     new InitiateFulfillmentCommand("ORDER-INITIATE-002");
-            orderApplicationService.initiateFulfillment(initiateCommand);
+            orderApplicationService.initiateFulfillment(initiateCommand, TriggerContext.manual());
 
             Optional<Order> awaitingOrder = orderRepository.findById("ORDER-INITIATE-002");
             assertTrue(awaitingOrder.isPresent());
@@ -355,7 +363,8 @@ class OrderApplicationServiceIntegrationTest {
                     assertThrows(
                             IllegalArgumentException.class,
                             () -> {
-                                orderApplicationService.initiateFulfillment(command);
+                                orderApplicationService.initiateFulfillment(
+                                        command, TriggerContext.manual());
                             });
 
             assertTrue(exception.getMessage().contains("Order not found"));

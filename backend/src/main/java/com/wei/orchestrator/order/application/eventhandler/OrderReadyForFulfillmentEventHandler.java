@@ -55,7 +55,8 @@ public class OrderReadyForFulfillmentEventHandler {
                     new ReserveInventoryCommand(
                             orderId, item.getSku(), "WH001", item.getQuantity());
             InventoryOperationResultDto result =
-                    inventoryApplicationService.reserveInventory(command);
+                    inventoryApplicationService.reserveInventory(
+                            command, event.getTriggerContext());
 
             if (!result.isSuccess()) {
                 logger.error(

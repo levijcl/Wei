@@ -47,14 +47,15 @@ class NewOrderObservedEventHandlerTest {
             when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
             when(observationToOrderTranslator.translate(any(ObservationResult.class)))
                     .thenReturn(new CreateOrderCommand());
-            when(orderApplicationService.createOrder(any(CreateOrderCommand.class)))
+            when(orderApplicationService.createOrder(any(CreateOrderCommand.class), any()))
                     .thenReturn(createMockOrder(orderId));
 
             eventHandler.handleNewOrderObserved(event);
 
             verify(orderRepository, times(1)).findById(orderId);
             verify(observationToOrderTranslator).translate(any(ObservationResult.class));
-            verify(orderApplicationService, times(1)).createOrder(any(CreateOrderCommand.class));
+            verify(orderApplicationService, times(1))
+                    .createOrder(any(CreateOrderCommand.class), any());
         }
 
         @Test
@@ -69,7 +70,8 @@ class NewOrderObservedEventHandlerTest {
 
             verify(orderRepository, times(1)).findById(orderId);
             verify(observationToOrderTranslator, never()).translate(any(ObservationResult.class));
-            verify(orderApplicationService, never()).createOrder(any(CreateOrderCommand.class));
+            verify(orderApplicationService, never())
+                    .createOrder(any(CreateOrderCommand.class), any());
         }
 
         @Test
@@ -80,7 +82,7 @@ class NewOrderObservedEventHandlerTest {
             when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
             when(observationToOrderTranslator.translate(event.getObservedOrder()))
                     .thenReturn(new CreateOrderCommand());
-            when(orderApplicationService.createOrder(any(CreateOrderCommand.class)))
+            when(orderApplicationService.createOrder(any(CreateOrderCommand.class), any()))
                     .thenThrow(new RuntimeException("Database connection failed"));
 
             RuntimeException exception =
@@ -92,7 +94,8 @@ class NewOrderObservedEventHandlerTest {
 
             assertTrue(exception.getMessage().contains("Database connection failed"));
             verify(orderRepository, times(1)).findById(orderId);
-            verify(orderApplicationService, times(1)).createOrder(any(CreateOrderCommand.class));
+            verify(orderApplicationService, times(1))
+                    .createOrder(any(CreateOrderCommand.class), any());
         }
 
         @Test
@@ -106,7 +109,8 @@ class NewOrderObservedEventHandlerTest {
             eventHandler.handleNewOrderObserved(event);
 
             verify(orderRepository, times(1)).findById(orderId);
-            verify(orderApplicationService, never()).createOrder(any(CreateOrderCommand.class));
+            verify(orderApplicationService, never())
+                    .createOrder(any(CreateOrderCommand.class), any());
             verifyNoMoreInteractions(orderApplicationService);
         }
     }

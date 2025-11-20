@@ -2,7 +2,9 @@ package com.wei.orchestrator.inventory.application.eventhandler;
 
 import com.wei.orchestrator.inventory.application.InventoryApplicationService;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import com.wei.orchestrator.wes.domain.event.PickingTaskCompletedEvent;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -36,20 +38,25 @@ public class PickingTaskCompletedEventHandler {
             return;
         }
 
-        InventoryOperationResultDto result =
-                inventoryApplicationService.consumeReservationForOrder(event.getOrderId());
+        TriggerContext triggerContext = event.getTriggerContext();
 
-        if (result.isSuccess()) {
-            logger.info(
-                    "Successfully consumed reservation for order: {} after picking task: {}",
-                    event.getOrderId(),
-                    event.getTaskId());
-        } else {
-            logger.error(
-                    "Failed to consume reservation for order: {} after picking task: {}, error: {}",
-                    event.getOrderId(),
-                    event.getTaskId(),
-                    result.getErrorMessage());
+        List<InventoryOperationResultDto> results =
+                inventoryApplicationService.consumeReservationForOrder(
+                        event.getOrderId(), triggerContext);
+        for (InventoryOperationResultDto result : results) {
+            if (result.isSuccess()) {
+                logger.info(
+                        "Successfully consumed reservation for order: {} after picking task: {}",
+                        event.getOrderId(),
+                        event.getTaskId());
+            } else {
+                logger.error(
+                        "Failed to consume reservation for order: {} after picking task: {}, error:"
+                                + " {}",
+                        event.getOrderId(),
+                        event.getTaskId(),
+                        result.getErrorMessage());
+            }
         }
     }
 }

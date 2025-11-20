@@ -51,7 +51,7 @@ public class NewOrderObservedEventHandler {
 
         CreateOrderCommand command = translator.translate(observedOrder);
 
-        orderApplicationService.createOrder(command);
+        orderApplicationService.createOrder(command, event.getTriggerContext());
 
         logger.info(
                 "Successfully created order {} from observed event at {}",

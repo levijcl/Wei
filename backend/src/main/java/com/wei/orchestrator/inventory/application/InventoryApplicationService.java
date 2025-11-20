@@ -2,10 +2,16 @@ package com.wei.orchestrator.inventory.application;
 
 import com.wei.orchestrator.inventory.application.command.*;
 import com.wei.orchestrator.inventory.application.dto.InventoryOperationResultDto;
+import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
+import com.wei.orchestrator.inventory.domain.event.InventoryTransactionFailedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationConsumedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationFailedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationReleasedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.*;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
+import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,7 +35,8 @@ public class InventoryApplicationService {
     }
 
     @Transactional
-    public InventoryOperationResultDto reserveInventory(ReserveInventoryCommand command) {
+    public InventoryOperationResultDto reserveInventory(
+            ReserveInventoryCommand command, TriggerContext triggerContext) {
         InventoryTransaction transaction =
                 InventoryTransaction.createReservation(
                         command.getOrderId(),
@@ -50,20 +57,21 @@ public class InventoryApplicationService {
             transaction.markAsReserved(externalReservationId);
             inventoryTransactionRepository.save(transaction);
 
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext, "OrderReadyForFulfillmentEvent");
 
             return InventoryOperationResultDto.success(transaction.getTransactionId());
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext, "OrderReadyForFulfillmentEvent");
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public InventoryOperationResultDto consumeReservation(ConsumeReservationCommand command) {
+    public InventoryOperationResultDto consumeReservation(
+            ConsumeReservationCommand command, TriggerContext triggerContext) {
         InventoryTransaction reservationTransaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
@@ -102,74 +110,90 @@ public class InventoryApplicationService {
             consumptionTransaction.complete();
             inventoryTransactionRepository.save(consumptionTransaction);
 
-            publishEvents(consumptionTransaction);
+            publishEventsWithContext(
+                    consumptionTransaction, triggerContext, "PickingTaskCompletedEvent");
 
             return InventoryOperationResultDto.success(consumptionTransaction.getTransactionId());
 
         } catch (Exception e) {
             consumptionTransaction.fail(e.getMessage());
             inventoryTransactionRepository.save(consumptionTransaction);
-            publishEvents(consumptionTransaction);
+            publishEventsWithContext(
+                    consumptionTransaction, triggerContext, "PickingTaskCompletedEvent");
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
 
     @Transactional
-    public InventoryOperationResultDto consumeReservationForOrder(String orderId) {
+    public List<InventoryOperationResultDto> consumeReservationForOrder(
+            String orderId, TriggerContext triggerContext) {
         List<InventoryTransaction> transactions =
                 inventoryTransactionRepository.findBySourceReferenceId(orderId);
 
-        InventoryTransaction reservationTransaction =
+        List<InventoryTransaction> reservationTransactions =
                 transactions.stream()
                         .filter(t -> t.getExternalReservationId() != null)
                         .filter(t -> t.getStatus().equals(TransactionStatus.COMPLETED))
                         .filter(t -> t.getSource().equals(TransactionSource.ORDER_RESERVATION))
-                        .findFirst()
-                        .orElse(null);
+                        .toList();
 
-        if (reservationTransaction == null) {
-            return InventoryOperationResultDto.failure(
-                    "No valid reservation transaction found for order: " + orderId);
+        if (reservationTransactions.isEmpty()) {
+            return List.of(
+                    InventoryOperationResultDto.failure(
+                            "No valid reservation transaction found for order: " + orderId));
         }
 
-        ConsumeReservationCommand command =
-                new ConsumeReservationCommand(
-                        reservationTransaction.getTransactionId(),
-                        reservationTransaction.getExternalReservationId().getValue(),
-                        orderId);
+        List<InventoryOperationResultDto> resultList = new ArrayList<>();
+        for (InventoryTransaction reservationTransaction : reservationTransactions) {
+            ConsumeReservationCommand command =
+                    new ConsumeReservationCommand(
+                            reservationTransaction.getTransactionId(),
+                            reservationTransaction.getExternalReservationId().getValue(),
+                            orderId);
 
-        return consumeReservation(command);
+            InventoryOperationResultDto result = consumeReservation(command, triggerContext);
+            resultList.add(result);
+        }
+
+        return resultList;
     }
 
     @Transactional
-    public InventoryOperationResultDto releaseReservationForOrder(String orderId, String reason) {
+    public List<InventoryOperationResultDto> releaseReservationForOrder(
+            String orderId, String reason, TriggerContext triggerContext) {
         List<InventoryTransaction> transactions =
                 inventoryTransactionRepository.findBySourceReferenceId(orderId);
 
-        InventoryTransaction reservationTransaction =
+        List<InventoryTransaction> reservationTransactions =
                 transactions.stream()
                         .filter(t -> t.getExternalReservationId() != null)
                         .filter(t -> t.getStatus().equals(TransactionStatus.COMPLETED))
                         .filter(t -> t.getSource().equals(TransactionSource.ORDER_RESERVATION))
-                        .findFirst()
-                        .orElse(null);
+                        .toList();
 
-        if (reservationTransaction == null) {
-            return InventoryOperationResultDto.failure(
-                    "No valid reservation transaction found for order: " + orderId);
+        if (reservationTransactions.isEmpty()) {
+            return List.of(
+                    InventoryOperationResultDto.failure(
+                            "No valid reservation transaction found for order: " + orderId));
         }
 
-        ReleaseReservationCommand command =
-                new ReleaseReservationCommand(
-                        reservationTransaction.getTransactionId(),
-                        reservationTransaction.getExternalReservationId().getValue(),
-                        reason);
+        List<InventoryOperationResultDto> resultList = new ArrayList<>();
+        for (InventoryTransaction reservationTransaction : reservationTransactions) {
+            ReleaseReservationCommand command =
+                    new ReleaseReservationCommand(
+                            reservationTransaction.getTransactionId(),
+                            reservationTransaction.getExternalReservationId().getValue(),
+                            reason);
 
-        return releaseReservation(command);
+            resultList.add(releaseReservation(command, triggerContext));
+        }
+
+        return resultList;
     }
 
     @Transactional
-    public InventoryOperationResultDto releaseReservation(ReleaseReservationCommand command) {
+    public InventoryOperationResultDto releaseReservation(
+            ReleaseReservationCommand command, TriggerContext triggerContext) {
         InventoryTransaction transaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
@@ -190,14 +214,14 @@ public class InventoryApplicationService {
             transaction.releaseReservation();
             inventoryTransactionRepository.save(transaction);
 
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext, "PickingTaskCanceledEvent");
 
             return InventoryOperationResultDto.successVoid();
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext, "PickingTaskCanceledEvent");
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
@@ -287,5 +311,63 @@ public class InventoryApplicationService {
     private void publishEvents(InventoryTransaction transaction) {
         transaction.getDomainEvents().forEach(eventPublisher::publishEvent);
         transaction.clearDomainEvents();
+    }
+
+    private void publishEventsWithContext(
+            InventoryTransaction transaction, TriggerContext triggerContext, String triggerSource) {
+        TriggerContext context = triggerContext != null ? triggerContext : TriggerContext.manual();
+
+        transaction.getDomainEvents().stream()
+                .map(event -> enrichWithTriggerContext(event, context, triggerSource))
+                .forEach(eventPublisher::publishEvent);
+        transaction.clearDomainEvents();
+    }
+
+    private Object enrichWithTriggerContext(
+            Object event, TriggerContext triggerContext, String triggerSource) {
+        TriggerContext newContext =
+                TriggerContext.of(
+                        triggerSource,
+                        triggerContext.getCorrelationId(),
+                        triggerContext.getTriggerBy());
+
+        if (event instanceof InventoryReservedEvent original) {
+            return new InventoryReservedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getExternalReservationId(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof ReservationFailedEvent original) {
+            return new ReservationFailedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof InventoryTransactionFailedEvent original) {
+            return new InventoryTransactionFailedEvent(
+                    original.getTransactionId(),
+                    original.getType(),
+                    original.getSource(),
+                    original.getReason(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof ReservationConsumedEvent original) {
+            return new ReservationConsumedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getExternalReservationId(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof ReservationReleasedEvent original) {
+            return new ReservationReleasedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getExternalReservationId(),
+                    original.getOccurredAt(),
+                    newContext);
+        }
+        return event;
     }
 }

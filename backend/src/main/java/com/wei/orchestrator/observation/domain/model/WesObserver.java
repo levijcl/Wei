@@ -4,14 +4,15 @@ import com.wei.orchestrator.observation.domain.event.WesTaskDiscoveredEvent;
 import com.wei.orchestrator.observation.domain.event.WesTaskStatusUpdatedEvent;
 import com.wei.orchestrator.observation.domain.model.valueobject.PollingInterval;
 import com.wei.orchestrator.observation.domain.model.valueobject.TaskEndpoint;
+import com.wei.orchestrator.wes.domain.model.PickingTask;
 import com.wei.orchestrator.wes.domain.model.valueobject.TaskStatus;
+import com.wei.orchestrator.wes.domain.model.valueobject.WesTaskId;
 import com.wei.orchestrator.wes.domain.port.WesPort;
 import com.wei.orchestrator.wes.infrastructure.adapter.dto.WesTaskDto;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 public class WesObserver {
     private String observerId;
@@ -45,31 +46,38 @@ public class WesObserver {
         this.domainEvents = new ArrayList<>();
     }
 
-    public void pollWesTaskStatus(
-            WesPort wesPort,
-            List<String> existingWesTaskIds,
-            Map<String, TaskStatus> existingTaskStatuses) {
+    public void pollWesTaskStatus(WesPort wesPort, List<PickingTask> allPickingTasks) {
         if (!this.shouldPoll()) {
             return;
         }
-
-        List<WesTaskDto> wesTasks = wesPort.pollAllTasks();
+        List<WesTaskDto> externalWesTasks = wesPort.pollAllTasks();
 
         this.lastPolledTimestamp = LocalDateTime.now();
+        List<String> existingWesTaskIds =
+                allPickingTasks.stream()
+                        .map(PickingTask::getWesTaskId)
+                        .map(WesTaskId::getValue)
+                        .toList();
 
-        for (WesTaskDto wesTask : wesTasks) {
-            String wesTaskId = wesTask.getTaskId();
+        for (WesTaskDto externalWesTask : externalWesTasks) {
+            String wesTaskId = externalWesTask.getTaskId();
 
             if (!existingWesTaskIds.contains(wesTaskId)) {
-                WesTaskDiscoveredEvent event = new WesTaskDiscoveredEvent(wesTask);
+                WesTaskDiscoveredEvent event = new WesTaskDiscoveredEvent(externalWesTask);
                 this.domainEvents.add(event);
             } else {
-                TaskStatus currentStatus = existingTaskStatuses.get(wesTaskId);
-                TaskStatus newStatus = TaskStatus.valueOf(wesTask.getStatus());
+                PickingTask currentTask =
+                        allPickingTasks.stream()
+                                .filter(p -> p.getWesTaskId().getValue().equals(wesTaskId))
+                                .findFirst()
+                                .orElseThrow(
+                                        () -> new RuntimeException("Can not find by wes task id"));
+                TaskStatus currentStatus = currentTask.getStatus();
+                TaskStatus newStatus = TaskStatus.valueOf(externalWesTask.getStatus());
 
                 if (currentStatus != null && !currentStatus.equals(newStatus)) {
                     WesTaskStatusUpdatedEvent event =
-                            new WesTaskStatusUpdatedEvent(wesTaskId, newStatus);
+                            new WesTaskStatusUpdatedEvent(currentTask.getTaskId(), newStatus);
                     this.domainEvents.add(event);
                 }
             }
