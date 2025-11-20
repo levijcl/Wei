@@ -590,8 +590,25 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             String wesTaskId = "WES-CORR-" + UUID.randomUUID().toString().substring(0, 8);
             String orderId = "CORR-ORDER-" + UUID.randomUUID().toString().substring(0, 8);
             UUID correlationId = UUID.randomUUID();
+            String sku = "SKU-CORR-003";
 
-            List<TaskItem> items = List.of(TaskItem.of("SKU-CORR-003", 3, "WH-001"));
+            Order order = new Order(orderId, List.of(new OrderLineItem(sku, 10, BigDecimal.TEN)));
+            order.createOrder();
+            order.markReadyForFulfillment();
+            order.reserveLineItem(
+                    order.getOrderLineItems().get(0).getLineItemId(),
+                    "TX-001",
+                    "EXT-001",
+                    "WH-001");
+            order.markItemsAsPickingInProgress(List.of(sku), wesTaskId);
+            orderRepository.save(order);
+
+            InventoryTransaction transaction =
+                    InventoryTransaction.createReservation(orderId, sku, "WH-001", 10);
+            transaction.markAsReserved(ExternalReservationId.of("EXT-001"));
+            inventoryTransactionRepository.save(transaction);
+
+            List<TaskItem> items = List.of(TaskItem.of(sku, 3, "WH-001"));
             PickingTask pickingTask = PickingTask.createForOrder(orderId, items, 5);
             pickingTask.submitToWes(WesTaskId.of(wesTaskId));
             pickingTaskRepository.save(pickingTask);
@@ -613,7 +630,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     auditRecordRepository.findByCorrelationId(correlationId);
 
             assertFalse(auditRecords.isEmpty(), "Should have audit records");
-            assertEquals(2, auditRecords.size(), "Should have exactly 2 audit records");
+            assertEquals(3, auditRecords.size(), "Should have exactly 2 audit records");
 
             boolean allHaveSameCorrelationId =
                     auditRecords.stream()
@@ -632,6 +649,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             assertTrue(
                     eventNames.contains("PickingTaskCanceledEvent"),
                     "Should audit PickingTaskCanceledEvent");
+            assertTrue(eventNames.contains("ReservationReleasedEvent"));
 
             AuditRecord wesTaskStatusUpdatedRecord =
                     auditRecords.stream()
@@ -653,6 +671,15 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
                     pickingTaskCanceledRecord.getEventMetadata().getTriggerSource(),
                     "PickingTaskCanceledEvent should have trigger source from"
                             + " WesTaskStatusUpdatedEvent");
+
+            AuditRecord reservationReleaseRecord =
+                    auditRecords.stream()
+                            .filter(r -> "ReservationReleasedEvent".equals(r.getEventName()))
+                            .findFirst()
+                            .orElseThrow();
+            assertEquals(
+                    "PickingTaskCanceledEvent",
+                    reservationReleaseRecord.getEventMetadata().getTriggerSource());
         }
     }
 }
