@@ -6,6 +6,7 @@ import com.wei.orchestrator.inventory.domain.event.InventoryReservedEvent;
 import com.wei.orchestrator.inventory.domain.event.InventoryTransactionFailedEvent;
 import com.wei.orchestrator.inventory.domain.event.ReservationConsumedEvent;
 import com.wei.orchestrator.inventory.domain.event.ReservationFailedEvent;
+import com.wei.orchestrator.inventory.domain.event.ReservationReleasedEvent;
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.*;
 import com.wei.orchestrator.inventory.domain.port.InventoryPort;
@@ -159,7 +160,7 @@ public class InventoryApplicationService {
 
     @Transactional
     public List<InventoryOperationResultDto> releaseReservationForOrder(
-            String orderId, String reason) {
+            String orderId, String reason, TriggerContext triggerContext) {
         List<InventoryTransaction> transactions =
                 inventoryTransactionRepository.findBySourceReferenceId(orderId);
 
@@ -184,14 +185,15 @@ public class InventoryApplicationService {
                             reservationTransaction.getExternalReservationId().getValue(),
                             reason);
 
-            resultList.add(releaseReservation(command));
+            resultList.add(releaseReservation(command, triggerContext));
         }
 
         return resultList;
     }
 
     @Transactional
-    public InventoryOperationResultDto releaseReservation(ReleaseReservationCommand command) {
+    public InventoryOperationResultDto releaseReservation(
+            ReleaseReservationCommand command, TriggerContext triggerContext) {
         InventoryTransaction transaction =
                 inventoryTransactionRepository
                         .findById(command.getTransactionId())
@@ -212,14 +214,14 @@ public class InventoryApplicationService {
             transaction.releaseReservation();
             inventoryTransactionRepository.save(transaction);
 
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext, "PickingTaskCanceledEvent");
 
             return InventoryOperationResultDto.successVoid();
 
         } catch (Exception e) {
             transaction.fail(e.getMessage());
             inventoryTransactionRepository.save(transaction);
-            publishEvents(transaction);
+            publishEventsWithContext(transaction, triggerContext, "PickingTaskCanceledEvent");
             return InventoryOperationResultDto.failure(e.getMessage());
         }
     }
@@ -353,6 +355,13 @@ public class InventoryApplicationService {
                     newContext);
         } else if (event instanceof ReservationConsumedEvent original) {
             return new ReservationConsumedEvent(
+                    original.getTransactionId(),
+                    original.getOrderId(),
+                    original.getExternalReservationId(),
+                    original.getOccurredAt(),
+                    newContext);
+        } else if (event instanceof ReservationReleasedEvent original) {
+            return new ReservationReleasedEvent(
                     original.getTransactionId(),
                     original.getOrderId(),
                     original.getExternalReservationId(),

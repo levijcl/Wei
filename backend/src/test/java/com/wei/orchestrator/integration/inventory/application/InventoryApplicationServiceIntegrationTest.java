@@ -217,7 +217,8 @@ class InventoryApplicationServiceIntegrationTest {
                     new ReleaseReservationCommand(transactionId, "EXT-RES-005", "Order cancelled");
 
             InventoryOperationResultDto releaseResult =
-                    inventoryApplicationService.releaseReservation(releaseCommand);
+                    inventoryApplicationService.releaseReservation(
+                            releaseCommand, TriggerContext.manual());
             assertTrue(releaseResult.isSuccess());
 
             Optional<InventoryTransaction> updatedTransaction =

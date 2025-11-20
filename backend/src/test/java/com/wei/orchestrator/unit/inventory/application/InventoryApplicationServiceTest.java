@@ -178,7 +178,7 @@ class InventoryApplicationServiceTest {
             when(inventoryTransactionRepository.save(any(InventoryTransaction.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            inventoryApplicationService.releaseReservation(command);
+            inventoryApplicationService.releaseReservation(command, TriggerContext.manual());
 
             verify(inventoryPort).releaseReservation(ExternalReservationId.of("EXT-RES-003"));
             verify(inventoryTransactionRepository).save(any(InventoryTransaction.class));
