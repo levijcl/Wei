@@ -1,8 +1,6 @@
 package com.wei.orchestrator.integration.wes.application.eventhandler;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
 import com.wei.orchestrator.inventory.domain.model.valueobject.ExternalReservationId;
@@ -423,8 +421,7 @@ class WesTaskStatusUpdatedEventHandlerIntegrationTest {
             UUID correlationId = UUID.randomUUID();
             String sku = "SKU-CORR-001";
 
-            Order order =
-                    new Order(orderId, List.of(new OrderLineItem(sku, 10, BigDecimal.TEN)));
+            Order order = new Order(orderId, List.of(new OrderLineItem(sku, 10, BigDecimal.TEN)));
             order.createOrder();
             order.markReadyForFulfillment();
             order.reserveLineItem(
