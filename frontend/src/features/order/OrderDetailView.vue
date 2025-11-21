@@ -8,7 +8,7 @@ const handleClickBack = () => {
 }
 </script>
 <template>
-  <div class="w-196 m-auto">
+  <div class="m-auto">
     <header class="h-16 flex items-center">
       <button
         class="bg-white text-black px-4 rounded h-8 hover:cursor-pointer"

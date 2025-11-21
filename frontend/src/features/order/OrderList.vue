@@ -32,7 +32,7 @@ const handleClick = (orderId) => {
         <td>{{ order.amount }}</td>
         <td>
           <button
-            class="bg-gray-400 px-4 roudned hover:cursor-pointer rounded"
+            class="bg-gray-400 px-4 roudned hover:cursor-pointer rounded my-2"
             @click="() => handleClick(order.orderId)"
           >
             Detail

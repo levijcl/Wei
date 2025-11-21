@@ -34,4 +34,16 @@ export async function getOrderDetail(orderId) {
   return response.data
 }
 
+export async function getOrderDetailStatus(orderId, step) {
+  const response = await apiClient.get(`/api/orders/${orderId}/process-status`)
+  return response.data
+}
+
+export async function getOrderDetailStatusStep(orderId, step) {
+  const response = await apiClient.get(
+    `/api/orders/${orderId}/process-status/step/${step}`
+  )
+  return response.data
+}
+
 export { apiClient }

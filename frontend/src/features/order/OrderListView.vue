@@ -26,7 +26,7 @@ const orders = computed(() => {
 })
 </script>
 <template>
-  <div class="flex flex-col w-240 m-auto">
+  <div class="flex flex-col m-auto">
     <OrderListSearch @search="handleSearch" />
     <hr class="my-4" />
     <OrderList :orders="orders" />
