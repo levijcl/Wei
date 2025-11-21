@@ -5,6 +5,8 @@ import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionStatus
 import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionType;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "inventory_transactions")
@@ -52,6 +54,14 @@ public class InventoryTransactionEntity {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @OneToMany(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "transaction_id",
+            referencedColumnName = "transaction_id",
+            insertable = false,
+            updatable = false)
+    private List<TransactionLineEntity> transactionLines = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
@@ -168,5 +178,13 @@ public class InventoryTransactionEntity {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public List<TransactionLineEntity> getTransactionLines() {
+        return transactionLines;
+    }
+
+    public void setTransactionLines(List<TransactionLineEntity> transactionLines) {
+        this.transactionLines = transactionLines;
     }
 }
