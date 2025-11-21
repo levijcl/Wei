@@ -1,4 +1,6 @@
 <script setup>
+import { useRouter } from 'vue-router'
+
 const { status } = defineProps({
   status: {
     type: Object,
@@ -6,6 +8,10 @@ const { status } = defineProps({
   },
 })
 const canClickable = (status) => status != 'PENDING'
+const router = useRouter()
+const handleClickDetail = (step) => {
+  router.push(`/orders/${status.orderId}/process-status/step/${step}`)
+}
 </script>
 <template>
   <div class="flex flex-col">
@@ -64,6 +70,7 @@ const canClickable = (status) => status != 'PENDING'
       <button
         v-if="canClickable(step.status)"
         class="px-4 h-8 rounded bg-gray-400 text-white hover:cursor-pointer"
+        @click="() => handleClickDetail(step.stepNumber)"
       >
         Detail
       </button>
