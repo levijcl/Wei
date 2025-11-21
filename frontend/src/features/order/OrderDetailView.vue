@@ -1,5 +1,5 @@
 <script setup>
-import OrderTaskDetail from './OrderTaskDetail.vue'
+import OrderDetail from './OrderDetail.vue'
 import TubeSpinner from '@/src/components/TubeSpinner.vue'
 import { useRouter } from 'vue-router'
 const router = useRouter()
@@ -19,7 +19,7 @@ const handleClickBack = () => {
     </header>
     <Suspense>
       <div>
-        <OrderTaskDetail />
+        <OrderDetail />
       </div>
       <template #fallback>
         <div class="relative top-64 left-1/2 -trnaslate-1/2 w-24">
