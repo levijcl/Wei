@@ -12,10 +12,7 @@ public enum ProcessStep {
             "Fulfillment Started",
             StepEventMatcher.singleEvent("OrderReadyForFulfillmentEvent")),
 
-    INVENTORY_RESERVED(
-            3,
-            "Inventory Reserved",
-            StepEventMatcher.successOrFailure("InventoryReservedEvent", "ReservationFailedEvent")),
+    INVENTORY_RESERVED(3, "Inventory Reserved", StepEventMatcher.inventoryReserved()),
 
     ORDER_RESERVED(4, "Order Reserved", StepEventMatcher.singleEvent("OrderReservedEvent")),
 

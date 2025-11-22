@@ -97,6 +97,67 @@ public interface StepEventMatcher {
         };
     }
 
+    static StepEventMatcher inventoryReserved() {
+        return new StepEventMatcher() {
+            @Override
+            public List<AuditRecordEntity> filterEvents(List<AuditRecordEntity> allRecords) {
+                return allRecords.stream()
+                        .filter(
+                                r ->
+                                        r.getEventName().equals("InventoryReservedEvent")
+                                                || r.getEventName().equals("ReservationFailedEvent")
+                                                || r.getEventName().equals("OrderReservedEvent"))
+                        .toList();
+            }
+
+            @Override
+            public OrderProcessStatusDto.ProcessStepDto createStepDto(
+                    int stepNumber, String stepName, List<AuditRecordEntity> filteredEvents) {
+                if (filteredEvents == null || filteredEvents.isEmpty()) {
+                    return new OrderProcessStatusDto.ProcessStepDto(
+                            stepNumber, stepName, "PENDING", null);
+                }
+
+                boolean isPickingTaskCreatedEventPresent =
+                        filteredEvents.stream()
+                                .anyMatch(r -> r.getEventName().equals("OrderReservedEvent"));
+
+                Optional<AuditRecordEntity> lastFailure =
+                        filteredEvents.stream()
+                                .filter(r -> r.getEventName().equals("ReservationFailedEvent"))
+                                .max(Comparator.comparing(AuditRecordEntity::getEventTimestamp));
+
+                Optional<AuditRecordEntity> lastSuccess =
+                        filteredEvents.stream()
+                                .filter(r -> r.getEventName().equals("InventoryReservedEvent"))
+                                .max(Comparator.comparing(AuditRecordEntity::getEventTimestamp));
+
+                if (isPickingTaskCreatedEventPresent) {
+                    return new OrderProcessStatusDto.ProcessStepDto(
+                            stepNumber, stepName, "SUCCESS", lastSuccess.get().getEventTimestamp());
+                }
+
+                if (lastFailure.isPresent()) {
+                    return new OrderProcessStatusDto.ProcessStepDto(
+                            stepNumber, stepName, "FAILED", lastFailure.get().getEventTimestamp());
+                }
+
+                if (lastSuccess.isPresent()) {
+                    return new OrderProcessStatusDto.ProcessStepDto(
+                            stepNumber, stepName, "SUCCESS", lastSuccess.get().getEventTimestamp());
+                }
+
+                return new OrderProcessStatusDto.ProcessStepDto(
+                        stepNumber, stepName, "PENDING", null);
+            }
+
+            @Override
+            public List<String> getEventNames() {
+                return List.of("InventoryReservedEvent", "ReservationFailedEvent");
+            }
+        };
+    }
+
     static StepEventMatcher pickingCompleted() {
         return new StepEventMatcher() {
             @Override
