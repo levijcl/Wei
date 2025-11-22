@@ -73,7 +73,7 @@ const statusColor = computed(() => {
                   v-for="action in handleFindActions(event.eventName)"
                   :key="action.label"
                   class="bg-gray-400 text-white px-4 rounded h-8 hover:cursor-pointer mr-2"
-                  @click="action.action"
+                  @click="() => action.action(event.payload)"
                 >
                   {{ action.label }}
                 </button>

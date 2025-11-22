@@ -2,17 +2,31 @@
 import { useRouter } from 'vue-router'
 import TubeSpinner from '@/src/components/TubeSpinner.vue'
 import OrderStep from './OrderStep.vue'
+import { getTransactionDetail, reserveInventory } from '@/src/apis/inventory.js'
 
+const router = useRouter()
 const config = {
   ReservationFailedEvent: [
     {
       label: 'Retry',
-      action: () => {},
+      action: async (eventPayload) => {
+        const { transactionId } = eventPayload
+        const { transactionLines, sourceReferenceId } =
+          await getTransactionDetail(transactionId)
+        transactionLines.forEach(async ({ sku, quantity }) => {
+          await reserveInventory({
+            orderId: sourceReferenceId,
+            sku,
+            quantity,
+          })
+
+          router.back()
+        })
+      },
     },
   ],
 }
 
-const router = useRouter()
 const handleClickBack = () => {
   router.back()
 }
