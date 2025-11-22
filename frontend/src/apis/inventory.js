@@ -26,4 +26,23 @@ export async function reserveInventory(reserveData) {
   return response.data
 }
 
+export async function getInventoryAdjustment(params = {}) {
+  const { statuses = [], page = 0, size = 40, sort = 'created_at' } = params
+
+  const queryParams = new URLSearchParams()
+
+  statuses.forEach((status) => {
+    queryParams.append('status', status)
+  })
+
+  queryParams.append('page', page)
+  queryParams.append('size', size)
+  queryParams.append('sort', sort)
+
+  const response = await apiClient.get(
+    `/api/inventory/adjustments?${queryParams}`
+  )
+  return response.data
+}
+
 export { apiClient }

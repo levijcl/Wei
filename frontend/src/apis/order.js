@@ -11,7 +11,7 @@ export async function getOrders(params = {}) {
   const {
     statuses = [],
     page = 0,
-    size = 20,
+    size = 40,
     sort = 'scheduled_pickup_time',
   } = params
 
@@ -44,6 +44,11 @@ export async function getOrderDetailStatusStep(orderId, step) {
     `/api/orders/${orderId}/process-status/steps/${step}`
   )
   return response.data
+}
+
+export async function initiateFulfillment(orderId) {
+  const resopnse = await apiClient.post(`/api/orders/${orderId}/fulfillment`)
+  return resopnse.data
 }
 
 export { apiClient }

@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import TubeSpinner from '@/src/components/TubeSpinner.vue'
 import OrderStep from './OrderStep.vue'
 import { getTransactionDetail, reserveInventory } from '@/src/apis/inventory.js'
+import { initiateFulfillment } from '@/src/apis/order.js'
 
 const router = useRouter()
 const config = {
@@ -22,6 +23,17 @@ const config = {
 
           router.back()
         })
+      },
+    },
+  ],
+  PickingTaskCanceledEvent: [
+    {
+      label: 'Re-fulfillment',
+      action: async (eventPayload) => {
+        const { orderId } = eventPayload
+        await initiateFulfillment(orderId)
+
+        router.back()
       },
     },
   ],

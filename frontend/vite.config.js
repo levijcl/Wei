@@ -15,6 +15,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         order: resolve(__dirname, 'order/index.html'),
+        inventory: resolve(__dirname, 'inventory/index.html'),
       },
     },
   },
