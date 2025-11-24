@@ -186,28 +186,18 @@ public interface StepEventMatcher {
                             stepNumber, stepName, "PENDING", null);
                 }
 
-                Optional<AuditRecordEntity> lastFailure =
+                Optional<AuditRecordEntity> lastEvent =
                         filteredEvents.stream()
-                                .filter(
-                                        r ->
-                                                r.getEventName().equals("PickingTaskFailedEvent")
-                                                        || r.getEventName()
-                                                                .equals("PickingTaskCanceledEvent"))
                                 .max(Comparator.comparing(AuditRecordEntity::getEventTimestamp));
 
-                Optional<AuditRecordEntity> lastSuccess =
-                        filteredEvents.stream()
-                                .filter(r -> r.getEventName().equals("PickingTaskCompletedEvent"))
-                                .max(Comparator.comparing(AuditRecordEntity::getEventTimestamp));
-
-                if (lastFailure.isPresent()) {
+                if (lastEvent.get().getEventName().equals("PickingTaskCompletedEvent")) {
                     return new OrderProcessStatusDto.ProcessStepDto(
-                            stepNumber, stepName, "FAILED", lastFailure.get().getEventTimestamp());
+                            stepNumber, stepName, "SUCCESS", lastEvent.get().getEventTimestamp());
                 }
-
-                if (lastSuccess.isPresent()) {
+                if (lastEvent.get().getEventName().equals("PickingTaskFailedEvent")
+                        || lastEvent.get().getEventName().equals("PickingTaskCanceledEvent")) {
                     return new OrderProcessStatusDto.ProcessStepDto(
-                            stepNumber, stepName, "SUCCESS", lastSuccess.get().getEventTimestamp());
+                            stepNumber, stepName, "FAILED", lastEvent.get().getEventTimestamp());
                 }
 
                 return new OrderProcessStatusDto.ProcessStepDto(

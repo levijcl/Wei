@@ -91,6 +91,14 @@ public class OrderLineItem {
         this.commitmentInfo = LineCommitmentInfo.failed(reason);
     }
 
+    public void resetReservation() {
+        this.reservationInfo = LineReservationInfo.pending();
+    }
+
+    public void resetCommitment() {
+        this.commitmentInfo = null;
+    }
+
     public boolean isReserved() {
         return reservationInfo != null && reservationInfo.isReserved();
     }

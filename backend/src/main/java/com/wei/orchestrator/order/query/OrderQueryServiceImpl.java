@@ -254,10 +254,31 @@ public class OrderQueryServiceImpl implements OrderQueryService {
 
         ProcessStep step = ProcessStep.values()[stepNumber - 1];
 
-        List<AuditRecordEntity> allRecords =
+        List<AuditRecordEntity> orderEvents =
                 processStatusQueryRepository.findByOrderIdInPayload(orderId);
 
-        List<AuditRecordEntity> stepEvents = step.filterEvents(allRecords);
+        Set<String> correlationIds =
+                orderEvents.stream()
+                        .map(this::extractCorrelationId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        List<AuditRecordEntity> allEvents =
+                processStatusQueryRepository.findByCorrelationIds(new ArrayList<>(correlationIds));
+
+        List<AuditRecordEntity> distinctEvents =
+                allEvents.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        AuditRecordEntity::getRecordId,
+                                        entity -> entity,
+                                        (existing, replacement) -> existing))
+                        .values()
+                        .stream()
+                        .sorted(Comparator.comparing(AuditRecordEntity::getEventTimestamp))
+                        .collect(Collectors.toList());
+
+        List<AuditRecordEntity> stepEvents = step.filterEvents(distinctEvents);
 
         OrderProcessStatusDto.ProcessStepDto stepSummary = step.createStepDto(stepEvents);
 

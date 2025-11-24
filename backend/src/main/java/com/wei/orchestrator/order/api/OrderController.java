@@ -4,6 +4,7 @@ import com.wei.orchestrator.order.api.dto.CreateOrderRequest;
 import com.wei.orchestrator.order.api.dto.OrderResponse;
 import com.wei.orchestrator.order.application.OrderApplicationService;
 import com.wei.orchestrator.order.application.command.CreateOrderCommand;
+import com.wei.orchestrator.order.application.command.InitiateFulfillmentCommand;
 import com.wei.orchestrator.order.domain.exception.InvalidOrderStatusException;
 import com.wei.orchestrator.order.domain.model.Order;
 import com.wei.orchestrator.order.domain.model.OrderLineItem;
@@ -99,6 +100,16 @@ public class OrderController {
         OrderResponse response = toOrderResponse(order);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/{orderId}/fulfillment")
+    public ResponseEntity<OrderDetailDto> initiateFulfillment(@PathVariable String orderId) {
+        InitiateFulfillmentCommand command = new InitiateFulfillmentCommand(orderId);
+
+        orderApplicationService.initiateFulfillment(command, TriggerContext.manual());
+
+        OrderDetailDto orderDetail = orderQueryService.getOrderDetail(orderId);
+        return ResponseEntity.ok(orderDetail);
     }
 
     private OrderResponse toOrderResponse(Order order) {
