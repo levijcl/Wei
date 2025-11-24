@@ -1,8 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { getInventoryAdjustment } from '@/src/apis/inventory.js'
+import { useRouter } from 'vue-router'
 
 const response = ref(await getInventoryAdjustment())
+const router = useRouter()
+const handleClickDetail = (id) => {
+  router.push(`/adjustments/${id}/discrepancy`)
+}
 const adjustments = computed(() => {
   if (!response.value?.content) return []
   return response.value.content.map(
@@ -43,6 +48,7 @@ const adjustments = computed(() => {
         <td>
           <button
             class="bg-gray-400 text-white rounded h-8 px-4 my-2 hover:cursor-pointer"
+            @click="handleClickDetail(item.adjustmentId)"
           >
             Detail
           </button>

@@ -42,6 +42,15 @@ export async function getInventoryAdjustment(params = {}) {
   const response = await apiClient.get(
     `/api/inventory/adjustments?${queryParams}`
   )
+
+  return response.data
+}
+
+export async function getInventoryAdjustmentDiscrepancy(adjustmentId) {
+  const response = await apiClient.get(
+    `/api/inventory/adjustments/${adjustmentId}/discrepancies`
+  )
+
   return response.data
 }
 
