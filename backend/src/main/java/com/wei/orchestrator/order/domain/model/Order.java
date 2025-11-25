@@ -78,7 +78,9 @@ public class Order {
     }
 
     public void markReadyForFulfillment() {
-        if (this.status != OrderStatus.SCHEDULED && this.status != OrderStatus.CREATED) {
+        if (this.status != OrderStatus.SCHEDULED
+                && this.status != OrderStatus.CREATED
+                && this.status != OrderStatus.FAILED_TO_COMMIT) {
             throw new IllegalStateException(
                     "Cannot mark order as ready for fulfillment in status: " + this.status);
         }
@@ -167,6 +169,18 @@ public class Order {
             }
         }
         updateOrderStatus();
+    }
+
+    public void resetLineItemReservations() {
+        for (OrderLineItem item : orderLineItems) {
+            item.resetReservation();
+        }
+    }
+
+    public void resetLineItemCommitments() {
+        for (OrderLineItem item : orderLineItems) {
+            item.resetCommitment();
+        }
     }
 
     public boolean isFullyReserved() {

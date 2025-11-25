@@ -14,6 +14,7 @@ import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepo
 import com.wei.orchestrator.shared.domain.model.valueobject.TriggerContext;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,18 @@ public class InventoryApplicationService {
     @Transactional
     public InventoryOperationResultDto reserveInventory(
             ReserveInventoryCommand command, TriggerContext triggerContext) {
+        Optional<InventoryTransaction> existingReservation =
+                inventoryTransactionRepository.findActiveReservationByOrderIdAndSku(
+                        command.getOrderId(), command.getSku());
+
+        if (existingReservation.isPresent()) {
+            return InventoryOperationResultDto.failure(
+                    "Inventory already reserved for order: "
+                            + command.getOrderId()
+                            + ", SKU: "
+                            + command.getSku());
+        }
+
         InventoryTransaction transaction =
                 InventoryTransaction.createReservation(
                         command.getOrderId(),

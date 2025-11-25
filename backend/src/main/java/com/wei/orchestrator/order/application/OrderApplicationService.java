@@ -96,6 +96,7 @@ public class OrderApplicationService {
                                         new IllegalArgumentException(
                                                 "Order not found: " + command.getOrderId()));
 
+        order.resetLineItemCommitments();
         order.markReadyForFulfillment();
         orderRepository.save(order);
 

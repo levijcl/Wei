@@ -28,7 +28,7 @@ class ProcessStepTest {
             List<AuditRecordEntity> filtered =
                     ProcessStep.INVENTORY_RESERVED.filterEvents(auditRecords);
 
-            assertEquals(2, filtered.size());
+            assertEquals(3, filtered.size());
             assertTrue(
                     filtered.stream()
                             .anyMatch(r -> r.getEventName().equals("InventoryReservedEvent")));

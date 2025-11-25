@@ -21,10 +21,14 @@ import com.wei.orchestrator.wes.query.PickingTaskQueryService;
 import com.wei.orchestrator.wes.query.dto.PickingTaskSummaryDto;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -193,10 +197,39 @@ public class OrderQueryServiceImpl implements OrderQueryService {
 
     @Override
     public OrderProcessStatusDto getOrderProcessStatus(String orderId) {
-        List<AuditRecordEntity> auditRecords =
+        List<AuditRecordEntity> orderEvents =
                 processStatusQueryRepository.findByOrderIdInPayload(orderId);
 
-        List<OrderProcessStatusDto.ProcessStepDto> steps = mapToProcessSteps(auditRecords);
+        if (orderEvents.isEmpty()) {
+            return new OrderProcessStatusDto(orderId, mapToProcessSteps(List.of()));
+        }
+
+        Set<String> correlationIds =
+                orderEvents.stream()
+                        .map(this::extractCorrelationId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        if (correlationIds.isEmpty()) {
+            return new OrderProcessStatusDto(orderId, mapToProcessSteps(orderEvents));
+        }
+
+        List<AuditRecordEntity> allEvents =
+                processStatusQueryRepository.findByCorrelationIds(new ArrayList<>(correlationIds));
+
+        List<AuditRecordEntity> distinctEvents =
+                allEvents.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        AuditRecordEntity::getRecordId,
+                                        entity -> entity,
+                                        (existing, replacement) -> existing))
+                        .values()
+                        .stream()
+                        .sorted(Comparator.comparing(AuditRecordEntity::getEventTimestamp))
+                        .collect(Collectors.toList());
+
+        List<OrderProcessStatusDto.ProcessStepDto> steps = mapToProcessSteps(distinctEvents);
 
         return new OrderProcessStatusDto(orderId, steps);
     }
@@ -221,10 +254,31 @@ public class OrderQueryServiceImpl implements OrderQueryService {
 
         ProcessStep step = ProcessStep.values()[stepNumber - 1];
 
-        List<AuditRecordEntity> allRecords =
+        List<AuditRecordEntity> orderEvents =
                 processStatusQueryRepository.findByOrderIdInPayload(orderId);
 
-        List<AuditRecordEntity> stepEvents = step.filterEvents(allRecords);
+        Set<String> correlationIds =
+                orderEvents.stream()
+                        .map(this::extractCorrelationId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        List<AuditRecordEntity> allEvents =
+                processStatusQueryRepository.findByCorrelationIds(new ArrayList<>(correlationIds));
+
+        List<AuditRecordEntity> distinctEvents =
+                allEvents.stream()
+                        .collect(
+                                Collectors.toMap(
+                                        AuditRecordEntity::getRecordId,
+                                        entity -> entity,
+                                        (existing, replacement) -> existing))
+                        .values()
+                        .stream()
+                        .sorted(Comparator.comparing(AuditRecordEntity::getEventTimestamp))
+                        .collect(Collectors.toList());
+
+        List<AuditRecordEntity> stepEvents = step.filterEvents(distinctEvents);
 
         OrderProcessStatusDto.ProcessStepDto stepSummary = step.createStepDto(stepEvents);
 
@@ -270,6 +324,17 @@ public class OrderQueryServiceImpl implements OrderQueryService {
                     (String) metadataMap.get("triggerBy"));
         } catch (JsonProcessingException e) {
             return new ProcessStepDetailDto.EventMetadataDto(null, null, null, null);
+        }
+    }
+
+    private String extractCorrelationId(AuditRecordEntity entity) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metadataMap =
+                    objectMapper.readValue(entity.getEventMetadata(), Map.class);
+            return (String) metadataMap.get("correlationId");
+        } catch (JsonProcessingException e) {
+            return null;
         }
     }
 }

@@ -17,4 +17,12 @@ public interface OrderProcessStatusQueryRepository
                             + " ORDER BY event_timestamp ASC",
             nativeQuery = true)
     List<AuditRecordEntity> findByOrderIdInPayload(@Param("orderId") String orderId);
+
+    @Query(
+            value =
+                    "SELECT * FROM audit_records WHERE JSON_VALUE(event_metadata,"
+                        + " '$.correlationId') IN (:correlationIds) ORDER BY event_timestamp ASC",
+            nativeQuery = true)
+    List<AuditRecordEntity> findByCorrelationIds(
+            @Param("correlationIds") List<String> correlationIds);
 }
