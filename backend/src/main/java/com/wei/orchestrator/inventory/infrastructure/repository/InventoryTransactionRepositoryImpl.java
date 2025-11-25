@@ -1,6 +1,7 @@
 package com.wei.orchestrator.inventory.infrastructure.repository;
 
 import com.wei.orchestrator.inventory.domain.model.InventoryTransaction;
+import com.wei.orchestrator.inventory.domain.model.valueobject.TransactionSource;
 import com.wei.orchestrator.inventory.domain.repository.InventoryTransactionRepository;
 import com.wei.orchestrator.inventory.infrastructure.mapper.InventoryTransactionMapper;
 import com.wei.orchestrator.inventory.infrastructure.persistence.InventoryTransactionEntity;
@@ -69,5 +70,34 @@ public class InventoryTransactionRepositoryImpl implements InventoryTransactionR
                             return InventoryTransactionMapper.toDomain(entity, lineEntities);
                         })
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<InventoryTransaction> findActiveReservationByOrderIdAndSku(
+            String orderId, String sku) {
+        List<InventoryTransactionEntity> entities =
+                jpaInventoryTransactionRepository.findCompletedReservationsByOrderIdAndSku(
+                        orderId, sku);
+
+        for (InventoryTransactionEntity entity : entities) {
+            boolean isConsumed =
+                    hasRelatedTransaction(
+                            entity.getTransactionId(), TransactionSource.RESERVATION_CONSUMED);
+            boolean isReleased = entity.getSource().equals(TransactionSource.RESERVATION_RELEASED);
+
+            if (!isConsumed && !isReleased) {
+                List<TransactionLineEntity> lineEntities =
+                        jpaTransactionLineRepository.findByTransactionId(entity.getTransactionId());
+                return Optional.of(InventoryTransactionMapper.toDomain(entity, lineEntities));
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private boolean hasRelatedTransaction(String transactionId, TransactionSource source) {
+        return jpaInventoryTransactionRepository.existsByRelatedTransactionIdAndSource(
+                transactionId, source);
     }
 }

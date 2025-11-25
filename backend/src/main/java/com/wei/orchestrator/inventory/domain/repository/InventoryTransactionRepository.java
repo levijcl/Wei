@@ -10,4 +10,6 @@ public interface InventoryTransactionRepository {
     Optional<InventoryTransaction> findById(String transactionId);
 
     List<InventoryTransaction> findBySourceReferenceId(String sourceReferenceId);
+
+    Optional<InventoryTransaction> findActiveReservationByOrderIdAndSku(String orderId, String sku);
 }
